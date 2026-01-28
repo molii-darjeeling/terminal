@@ -1,0 +1,21 @@
+{
+  "name": "HELIOS TERMINAL",
+  "short_name": "HELIOS",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#213063",
+  "theme_color": "#213063",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://files.catbox.moe/gq5aoo.png",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "https://files.catbox.moe/gq5aoo.png",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
