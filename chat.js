@@ -69,6 +69,13 @@ let longPressTargetChatId = null;
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     loadChatData();
+   const sendBtn = document.querySelector('.send-btn');
+    if(sendBtn) {
+        sendBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // 核心：阻止失去焦点，键盘就不会收起了
+            sendUserMessage();  // 手动触发发送
+        });
+    }
     // Pre-load stickers if empty
     if(stickers.length === 0) {
         stickers = [
