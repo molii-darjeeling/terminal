@@ -12,12 +12,12 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#213063">
     
-    <!-- Manifest -->
     <!-- Manifest (安卓/PWA 配置) -->
     <link rel="manifest" href="manifest.json">
     
     <!-- iOS Icon (苹果手机专用图标配置) -->
     <link rel="apple-touch-icon" href="https://files.catbox.moe/pq5tub.jpg">
+
     <!-- 引用外部样式表 -->
     <link rel="stylesheet" href="style.css">
 </head>
@@ -281,9 +281,9 @@
         </div>
     </div>
 
-    <!-- 2. 聊天窗口页 (CHAT ROOM) - [FIXED] -->
+    <!-- 2. 聊天窗口页 (CHAT ROOM) -->
     <div id="chat-room-page" class="system-page hidden" style="background: #e6ebf0;">
-        <!-- 顶部导航 [已修复：添加状态栏] -->
+        <!-- 顶部导航 -->
         <div class="sys-top-bar" style="justify-content: space-between; padding: 0 10px;">
             <div style="display:flex; align-items:center; gap:10px;">
                 <div class="back-arrow" onclick="exitChatRoom()">◀</div>
@@ -306,7 +306,7 @@
             <!-- 表情包面板 (默认隐藏) -->
             <div id="sticker-panel" class="sticker-panel hidden">
                 <div class="sticker-header">
-                    <span>已存表情</span>
+                    <span>已存表情 (长按删除)</span>
                     <button class="sys-btn-outline" style="width:auto; padding:2px 8px; font-size:0.75rem;" onclick="document.getElementById('sticker-upload').click()">+ 上传</button>
                     <input type="file" id="sticker-upload" class="hidden" accept="image/*" onchange="handleStickerUpload(this)">
                 </div>
@@ -315,11 +315,10 @@
                 </div>
             </div>
 
-            <!-- <!-- 工具栏 (输入框上方) -->
-<div class="chat-toolbar">
-    <!-- 直接放图标，CSS会把它排在左边并加间距 -->
-    <img src="https://files.catbox.moe/1poupw.png" class="tool-icon" id="sticker-toggle-btn" onclick="toggleStickerPanel(event)">
-</div>
+            <!-- 工具栏 (输入框上方) -->
+            <div class="chat-toolbar">
+                <img src="https://files.catbox.moe/1poupw.png" class="tool-icon" id="sticker-toggle-btn" onclick="toggleStickerPanel(event)">
+            </div>
 
             <!-- 输入行 -->
             <div class="chat-input-row">
@@ -328,7 +327,8 @@
                     <img src="https://files.catbox.moe/prdem6.png">
                 </div>
                 
-                <textarea id="chat-input" class="chat-textarea" rows="1" placeholder="发送消息..."></textarea>
+                <!-- 自适应高度输入框 -->
+                <textarea id="chat-input" class="chat-textarea" rows="1" placeholder="发送消息..." oninput="autoResizeInput(this)"></textarea>
                 
                 <!-- 发送键 (右) -->
                 <div class="chat-action-btn send-btn" onclick="sendUserMessage()">
@@ -337,7 +337,7 @@
             </div>
         </div>
 
-        <!-- 侧边菜单栏 (遮罩 + 面板) [已修复：添加总结控件] -->
+        <!-- 侧边菜单栏 (遮罩 + 面板) -->
         <div id="chat-sidebar-overlay" class="chat-sidebar-overlay hidden" onclick="toggleChatSidebar()"></div>
         <div id="chat-sidebar" class="chat-sidebar">
             <div class="sidebar-header">聊天设置</div>
@@ -348,15 +348,23 @@
                     <select id="chat-user-select" class="sys-select"></select>
                 </div>
 
+                <!-- 修改：世界书 (折叠多选) -->
                 <div class="sidebar-item">
-                    <label>🌍 世界书</label>
-                    <select id="chat-world-select" class="sys-select">
-                        <option value="off">不启用</option>
-                        <!-- JS 填充 -->
-                    </select>
+                    <label>🌍 世界书 (可多选)</label>
+                    <div class="custom-multiselect" style="position:relative;">
+                        <!-- 触发按钮 -->
+                        <div class="select-box" onclick="toggleWbDropdown()" style="border:1px solid #ddd; padding:8px; border-radius:6px; background:#fff; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                            <span id="wb-selected-text" style="font-size:0.9rem; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">选择世界书...</span>
+                            <span style="font-size:0.8rem; color:#888;">▼</span>
+                        </div>
+                        <!-- 下拉列表 (默认隐藏) -->
+                        <div id="wb-dropdown-list" class="hidden" style="position:absolute; top:100%; left:0; width:100%; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #ddd; border-top:none; border-radius:0 0 6px 6px; z-index:100; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+                            <!-- JS 填充 -->
+                        </div>
+                    </div>
                 </div>
 
-                <!-- 新增：长期记忆/总结设置 -->
+                <!-- 长期记忆/总结设置 -->
                 <div class="sidebar-item" style="border-top:1px dashed #ddd; padding-top:10px; margin-top:10px;">
                     <label>🧠 长期记忆 (AI 自动总结)</label>
                     <div style="display:flex; gap:10px;">
@@ -391,13 +399,30 @@
     
     <!-- SNS MODALS -->
     
-    <!-- [已修复：新增聊天列表长按菜单] -->
     <div id="chat-list-menu-modal" class="modal-overlay hidden" onclick="closeChatListMenu()">
         <div class="reply-box" onclick="event.stopPropagation()">
             <h3>会话操作</h3>
             <div class="action-menu-item" onclick="toggleChatPin()">📌 置顶 / 取消置顶</div>
             <div class="action-menu-item danger" onclick="deleteChatSession()">🗑️ 删除会话</div>
             <div class="action-menu-item" onclick="closeChatListMenu()">取消</div>
+        </div>
+    </div>
+
+    <!-- 消息长按菜单 (删除消息用) -->
+    <div id="msg-menu-modal" class="modal-overlay hidden" onclick="closeMsgMenu()">
+        <div class="reply-box" onclick="event.stopPropagation()">
+            <h3>消息操作</h3>
+            <div class="action-menu-item danger" onclick="confirmDeleteMsg()">🗑️ 删除此消息</div>
+            <div class="action-menu-item" onclick="closeMsgMenu()">取消</div>
+        </div>
+    </div>
+
+    <!-- 表情包长按菜单 (删除表情包用) -->
+    <div id="sticker-menu-modal" class="modal-overlay hidden" onclick="closeStickerMenu()">
+        <div class="reply-box" onclick="event.stopPropagation()">
+            <h3>表情包操作</h3>
+            <div class="action-menu-item danger" onclick="confirmDeleteSticker()">🗑️ 删除此表情</div>
+            <div class="action-menu-item" onclick="closeStickerMenu()">取消</div>
         </div>
     </div>
 
@@ -468,18 +493,6 @@
      <!-- CHAT MODALS -->
     
     <!-- 新建聊天选择角色 -->
-    <!-- search: <!-- CHAT MODALS --> -->
-<!-- search: <!-- 新建聊天选择角色 --> -->
-
-    <!-- [新增] 消息长按操作菜单 -->
-    <div id="msg-menu-modal" class="modal-overlay hidden" onclick="closeMsgMenu()">
-        <div class="reply-box" onclick="event.stopPropagation()">
-            <h3 style="margin-bottom:10px;">消息操作</h3>
-            <div class="action-menu-item danger" onclick="confirmDeleteMsg()">🗑️ 删除此条消息</div>
-            <div class="action-menu-item" onclick="closeMsgMenu()">取消</div>
-        </div>
-    </div>
-
     <div id="new-chat-modal" class="modal-overlay hidden">
         <div class="reply-box">
             <h3>💬 发起新私聊</h3>
