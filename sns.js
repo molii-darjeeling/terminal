@@ -30,12 +30,16 @@ function applyUserInfoToSNS() {
 }
 
 function getWorldContext() {
-    if(!user.worldBooks || user.worldBooks.length === 0) return "";
+    // [修改] 不再读取 user.worldBooks，改为读取全局 globalWorldBooks
+    if (typeof globalWorldBooks === 'undefined' || !globalWorldBooks || globalWorldBooks.length === 0) return "";
+    
     // Only use Enabled entries
-    const text = user.worldBooks
+    const text = globalWorldBooks
         .filter(w => w.isEnabled !== false)
         .map(w => w.content)
         .filter(t => t).join("\n");
+    
+    if (!text) return "";
     return `[WORLD SETTING / CURRENT EVENTS]:\n${text}`;
 }
 
