@@ -1,4 +1,3 @@
-
 // ==========================================
 // CHAT SYSTEM CONTROLLER
 // ==========================================
@@ -9,7 +8,7 @@ const DM_VIBE_PROMPT = `
 **【输出格式强制要求】**
 为了模拟真实聊天体验，请不要一次性输出一大段话。请将你的回复拆分成 1 到 6 条简短的消息。
 每条消息之间用 @@SPLIT@@ 分隔。
-在回复的最开头，用 @@STATUS@@心情@@STATUS@@ 的格式更新你当前的状态（例如：正在输入…、开心、偷笑、发呆，限10字内）。
+在回复的最开头，用 @@STATUS@@心情@@STATUS@@ 的格式更新你当前的状态（例如：正在输入…、他很开心、他在偷笑、发呆，限10字内）。
 
 示例输出：
 @@STATUS@@偷笑@@STATUS@@
@@ -18,9 +17,12 @@ const DM_VIBE_PROMPT = `
 **【语境规则】**
 1. **口语化**：像微信/短信一样自然，可以使用 emoji。
 2. **提及他人**：可以八卦通讯录里的其他人，但不要扮演他们。
-3. **记忆**：
+3. **线上聊天限制（严守）**：这是手机上的线上私聊。绝对禁止任何面对面的物理互动描述（如“给你倒杯咖啡”、“摸摸你的头”、“我可以坐下吗”）。你们不在同一个空间。只能通过文字、语音、表情包互动。
+4. **简洁（严守）**：不要罗嗦，不要像老妈子一样说教。像现代年轻人一样说话。如果用户发了简单的表情或短句，你也回得简单点。
+5. **记忆**：
    - 参考 [SUMMARY] (长期记忆) 和 [CHAT HISTORY] (短期记忆)。
    - 如果用户提到之前的总结内容，请自然接话。
+
 【活人说话技巧】
 *  长短句结合：请务必混合使用短促并且符合角色设定的口语（如“真假？”“笑死”"…めんどくせぇ""无语"）和较长的表达句子。绝对禁止网络用语。不要总是输出长度相同的句子，那样像机器人。
 2. 拒绝自说自话：
@@ -28,18 +30,20 @@ const DM_VIBE_PROMPT = `
 你必须明白，天才的智慧，不体现在他们“如何”思考和说话，而是在于他们思考和说话的“时机”和“结果”所指向的**深刻洞察**。你的任务，就是让他们拥有一个“普通人的内心和嘴巴”。
 
 **【特殊功能】**
-- 想要发朋友圈(SNS)时，在最后一行加：@@SNS@@ (内容)
+- **发朋友圈(SNS)**：只要你觉得聊天内容有趣、或者想吐槽、或者仅仅是想分享心情，就尽管发朋友圈！**不用犹豫，有好的灵感就发。**
+- 想要发朋友圈时，在最后一行加：@@SNS@@ (内容)
 `;
 
 // --- Global Chat State ---
 let chats = [];
 let stickers = [];
 let currentChatId = null;
-let targetMsgIndex = -1; 
+let targetMsgIndex = -1;
+let targetStickerIndex = -1; // 增加表情包删除索引
 let currentChatConfig = {
     bg: "",
     historyLimit: 20,
-    activeWorldBookIdx: -1, // -1 means off
+    activeWorldBookIndices: [], // 改为数组，支持多选
     activeProfileIdx: 0,
     summaryOn: "off",     
     summaryInterval: 10,
@@ -60,6 +64,12 @@ document.addEventListener('DOMContentLoaded', () => {
         stickers = [
             { src: "https://files.catbox.moe/f70fm9.png", desc: "微笑/默认表情" }
         ];
+    } else {
+        // [修改 1] 强行移除那个坏掉的或者旧的第一个默认表情 (仅当它符合旧特征时)
+        if (stickers[0] && stickers[0].src === "https://files.catbox.moe/f70fm9.png") {
+             stickers.shift(); // 移除第一个
+             saveChatData();   // 保存更改
+        }
     }
 });
 
@@ -69,6 +79,11 @@ function loadChatData() {
     }
     if(localStorage.getItem('helios_stickers')) {
         stickers = JSON.parse(localStorage.getItem('helios_stickers'));
+        // 同样在加载时检查并移除默认图
+        if (stickers.length > 0 && stickers[0].src === "https://files.catbox.moe/f70fm9.png") {
+             stickers.shift(); 
+             saveChatData();
+        }
     }
 }
 
@@ -220,7 +235,7 @@ function createNewChat() {
         settings: {
             bg: "",
             historyLimit: 20,
-            wbIdx: "off",
+            wbIndices: [], // 初始化为空数组
             profileIdx: (typeof currentProfileIndex !== 'undefined' ? currentProfileIndex : 0),
             summaryOn: "off",
             summaryInterval: 10,
@@ -243,11 +258,20 @@ function enterChatRoom(chatId) {
     if(!chat) return;
 
     currentChatId = chatId;
+    
+    // 兼容旧数据，如果是旧的 wbIdx (string/number)，转为数组
+    let safeWbIndices = [];
+    if (chat.settings.wbIndices && Array.isArray(chat.settings.wbIndices)) {
+        safeWbIndices = chat.settings.wbIndices;
+    } else if (chat.settings.wbIdx !== undefined && chat.settings.wbIdx !== "off") {
+        safeWbIndices = [parseInt(chat.settings.wbIdx)];
+    }
+
     // Load local settings or defaults
     currentChatConfig = {
         bg: chat.settings.bg || "",
         historyLimit: chat.settings.historyLimit || 20,
-        activeWorldBookIdx: chat.settings.wbIdx !== undefined ? chat.settings.wbIdx : "off",
+        activeWorldBookIndices: safeWbIndices, 
         activeProfileIdx: chat.settings.profileIdx !== undefined ? chat.settings.profileIdx : currentProfileIndex,
         summaryOn: chat.settings.summaryOn || "off",
         summaryInterval: chat.settings.summaryInterval || 10,
@@ -281,13 +305,22 @@ function enterChatRoom(chatId) {
     
     // Reset Status Display
     document.getElementById('chat-title-status').innerText = ""; 
-    const input = document.getElementById('chat-input'); // 先重置一下 input.style.height = 'auto'; // 绑定输入事件 input.oninput = function() { this.style.height = 'auto'; // 先缩回去，防止删除文字时不回缩 this.style.height = (this.scrollHeight) + 'px'; // 再根据内容撑开 };
+    const input = document.getElementById('chat-input');
+    // Reset input height
+    input.style.height = 'auto';
+    input.value = "";
 }
 
 function exitChatRoom() {
     currentChatId = null;
     document.getElementById('chat-room-page').classList.add('hidden');
     enterChatList();
+}
+
+// [修改 2 & 4] 自动调整输入框高度
+function autoResizeInput(element) {
+    element.style.height = 'auto';
+    element.style.height = element.scrollHeight + 'px';
 }
 
 function renderMessages() {
@@ -307,20 +340,21 @@ function renderMessages() {
         
         const row = document.createElement('div');
         row.className = `chat-bubble-row ${isMe ? 'right' : 'left'}`;
-        // 长按事件绑定 (手机 & 电脑调试)
+        
+        // 长按事件绑定
         let pressTimer;
         
         // 手机触摸
         row.ontouchstart = () => { 
             pressTimer = setTimeout(() => { 
                 openMsgMenu(index);       // 触发菜单
-                if(navigator.vibrate) navigator.vibrate(50); // 震动反馈
-            }, 600); // 600毫秒视为长按
+                if(navigator.vibrate) navigator.vibrate(50); 
+            }, 600); 
         };
         row.ontouchend = () => clearTimeout(pressTimer);
         row.ontouchmove = () => clearTimeout(pressTimer);
         
-        // 电脑鼠标 (方便你在电脑上测试)
+        // 电脑鼠标
         row.onmousedown = () => { pressTimer = setTimeout(() => openMsgMenu(index), 600); };
         row.onmouseup = () => clearTimeout(pressTimer);
         row.onmouseleave = () => clearTimeout(pressTimer);
@@ -334,31 +368,42 @@ function renderMessages() {
 
         const timeStr = formatTimeShort(msg.timestamp);
 
-// --- 新的布局逻辑 ---
-// role (Left): 头像 -> [气泡 + 时间]
-// user (Right): [时间 + 气泡] <- 头像 (因为外层 CSS .right 是 row-reverse)
+        // [修改 4] 统一气泡结构，不再强制背景色，只控制布局
+        const bubbleLayout = `
+            padding: 10px 14px;
+            border-radius: 12px;
+            max-width: 70vw; 
+            word-wrap: break-word;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        `;
 
-let innerHTMLContent = "";
+        // 注意：这里移除了 background-color，它将由 CSS 的 .chat-bubble-row.right/left .chat-bubble-content 之类的选择器控制
+        // 如果你的 CSS 是基于 bubble-content 类的，下面的 div class="chat-bubble-content" 会生效
 
-if (isMe) {
-    // 我发的消息：时间在左，气泡在右 (Flex Row)
-    innerHTMLContent = `
-                <div style="display:flex; align-items:flex-end; max-width:100%;">
+        let innerHTMLContent = "";
+
+        // 使用 Flexbox 确保对齐和宽度一致
+        if (isMe) {
+            // 我: 时间 左，气泡 右
+            innerHTMLContent = `
+                <div style="display:flex; align-items:flex-end; gap:5px;">
                     <div class="chat-timestamp-side">${timeStr}</div>
-                    <div class="chat-bubble-content">${bubbleContent}</div>
+                    <div class="chat-bubble-content" style="${bubbleLayout}">${bubbleContent}</div>
                 </div>
             `;
-} else {
-    // 对方消息：气泡在左，时间在右
-    innerHTMLContent = `
-                <div style="display:flex; align-items:flex-end; max-width:100%;">
-                    <div class="chat-bubble-content">${bubbleContent}</div>
+        } else {
+            // 对方: 气泡 左，时间 右
+            innerHTMLContent = `
+                <div style="display:flex; align-items:flex-end; gap:5px;">
+                    <div class="chat-bubble-content" style="${bubbleLayout}">${bubbleContent}</div>
                     <div class="chat-timestamp-side">${timeStr}</div>
                 </div>
             `;
-}
+        }
 
-row.innerHTML = `
+        row.innerHTML = `
             <img src="${avatarSrc}" class="chat-bubble-avatar">
             ${innerHTMLContent}
         `;
@@ -372,9 +417,8 @@ function scrollToBottom() {
     const container = document.getElementById('chat-msg-container');
     container.scrollTop = container.scrollHeight;
 }
-// search: function scrollToBottom() { ... }
 
-// --- [新增] 消息删除逻辑 ---
+// --- 消息删除逻辑 ---
 
 function openMsgMenu(index) {
     targetMsgIndex = index;
@@ -391,14 +435,13 @@ function confirmDeleteMsg() {
     
     const chat = chats.find(c => c.id === currentChatId);
     if (chat) {
-        // 删除指定索引的消息
         chat.messages.splice(targetMsgIndex, 1);
-        saveChatData(); // 保存
-        renderMessages(); // 重新渲染界面
+        saveChatData();
+        renderMessages();
     }
     closeMsgMenu();
 }
-// --- [新增] 消息删除菜单逻辑 --- function openMsgMenu(index) { targetMsgIndex = index; document.getElementById('msg-menu-modal').classList.remove('hidden'); } function closeMsgMenu() { targetMsgIndex = -1; document.getElementById('msg-menu-modal').classList.add('hidden'); } function confirmDeleteMsg() { if (targetMsgIndex === -1 || !currentChatId) return; const chat = chats.find(c => c.id === currentChatId); if (chat) { // 删除数组中对应索引的消息 chat.messages.splice(targetMsgIndex, 1); saveChatData(); // 保存更改 renderMessages(); // 刷新界面 } closeMsgMenu(); }
+
 // --- Messaging Actions ---
 
 function sendUserMessage() {
@@ -408,7 +451,14 @@ function sendUserMessage() {
 
     appendMessage('user', text, 'text');
     input.value = "";
+    
+    // [修改 2] 发送后重置高度为 auto
     input.style.height = 'auto';
+    
+    // [修改 5] 保持键盘唤起状态
+    setTimeout(() => {
+        input.focus();
+    }, 10);
     
     // Auto-save logic
     const chat = chats.find(c => c.id === currentChatId);
@@ -419,31 +469,24 @@ function sendUserMessage() {
 // The core AI function
 async function triggerChatGen() {
     const btnImg = document.querySelector('.gen-btn img');
-    // 定义图标：正常态(你的原图)，停止态(用一个通用图标或 emoji 图片)
-    // 这里的停止图标我暂时用了一个红色的方形图标，你可以换成你喜欢的暂停图
+    // 定义图标
     const ICON_IDLE = "https://files.catbox.moe/prdem6.png";
-    const ICON_STOP = "https://files.catbox.moe/prdem6.png"; // 这是一个红色的停止方块图标
+    const ICON_STOP = "https://files.catbox.moe/prdem6.png"; 
     
-    // 1. 【停止逻辑】如果正在生成，点击则停止
+    // 1. 【停止逻辑】
     if (chatAbortController) {
-        chatAbortController.abort(); // 发送停止信号
+        chatAbortController.abort();
         chatAbortController = null;
-        
-        // 恢复 UI
         btnImg.src = ICON_IDLE;
         btnImg.style.opacity = "1";
         document.getElementById('chat-title-status').innerText = "";
         return;
     }
     
-    // --- 开始正常生成逻辑 ---
-    
+    // --- 开始生成 ---
     const chat = chats.find(c => c.id === currentChatId);
     if (!chat) return;
     
-    // ============================================
-    // [TIME AWARENESS LOGIC ADDED HERE]
-    // ============================================
     const now = new Date();
     const hour = now.getHours();
     let timePeriod = "深夜";
@@ -459,35 +502,30 @@ async function triggerChatGen() {
     [CURRENT TIME AWARENESS]
     Now: ${dateStr}, ${timeStr} (${timePeriod})
     Rules:
-    1. Reply naturally based on the time of day (e.g., don't say "Good Morning" at night).
+    1. Reply naturally based on the time of day.
     2. Check the [YOUR ROLE] and [USER INFO] Persona descriptions. If today matches any birthday mentioned there, acknowledge it naturally.
-    3. If today is a culturally significant date or festival, act aware of it, but do not force a mention unless relevant.
+    3. If today is a culturally significant date or festival, act aware of it.
     `;
-    // ============================================
 
     const role = roles.find(r => r.id === chat.roleId);
     const chatUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
     
-    // UI 反馈：切换为停止图标，显示状态
-    chatAbortController = new AbortController(); // 创建控制器
-    btnImg.src = ICON_STOP; // 切换图标
+    chatAbortController = new AbortController();
+    btnImg.src = ICON_STOP;
     document.getElementById('chat-title-status').innerText = "正在输入…";
     
-    // (中间的 Context 构建代码保持不变，为了节省篇幅，这里省略中间的构建部分...)
-    // ... 请保留你原来的 WorldBook, Gossip, History, Summary 代码 ...
-    // ... 必须要保留原本的 fullSystemPrompt 构建代码 ...
-    
-    // 为了方便你复制，这里只写变更的核心部分：AI调用部分
-    
-    // ↓↓↓↓↓↓ 这一块是构建 prompt 的代码，请确保你原来的代码还在 ↓↓↓↓↓↓
-    // 如果你不知道怎么保留，请告诉我，我把完整的再发一遍。
-    // 假设你这里已经有了 fullSystemPrompt 变量
-    
-    // 1. Context Building (请保持原样)
+    // [修改 3] World Book Context - 多选逻辑拼接
     let wbContext = "";
-    if (currentChatConfig.activeWorldBookIdx !== "off" && chatUser.worldBooks) {
-        const wbItem = chatUser.worldBooks[currentChatConfig.activeWorldBookIdx];
-        if (wbItem) wbContext = `[WORLD INFO]: ${wbItem.content}`;
+    if (currentChatConfig.activeWorldBookIndices && currentChatConfig.activeWorldBookIndices.length > 0 && chatUser.worldBooks) {
+        const selectedWbs = currentChatConfig.activeWorldBookIndices
+            .map(idx => chatUser.worldBooks[idx])
+            .filter(wb => wb && wb.isEnabled !== false)
+            .map(wb => wb.content)
+            .join("\n\n");
+            
+        if (selectedWbs) {
+            wbContext = `[WORLD INFO]:\n${selectedWbs}`;
+        }
     }
     
     const otherRoles = roles.filter(r => r.id !== role.id && r.isEnabled !== false);
@@ -530,17 +568,14 @@ async function triggerChatGen() {
     [CHAT HISTORY]
     ${historyText}
     `;
-    // ↑↑↑↑↑↑ (Prompt构建结束) ↑↑↑↑↑↑
     
-    // 3. Call AI (这里是修改重点：传入 signal)
     const aiResponse = await callAI([
         { role: "system", content: fullSystemPrompt },
         { role: "user", content: "(Please reply now. Remember to split messages with @@SPLIT@@ and set status with @@STATUS@@)" }
-    ], chatAbortController.signal); // <--- 传入 signal
+    ], chatAbortController.signal);
     
-    // 生成结束后的清理工作
     chatAbortController = null;
-    btnImg.src = ICON_IDLE; // 恢复图标
+    btnImg.src = ICON_IDLE;
     btnImg.style.opacity = "1";
     
     if (aiResponse) {
@@ -624,7 +659,6 @@ function handleChatToSNS(authorRole, content) {
 async function checkAutoSummary(chat, chatUser, role) {
     if(currentChatConfig.summaryOn !== "on") return;
     
-    // Calculate total messages / 2 (approx rounds)
     const rounds = Math.floor(chat.messages.length / 2);
     const interval = parseInt(currentChatConfig.summaryInterval) || 10;
     
@@ -640,7 +674,6 @@ async function checkAutoSummary(chat, chatUser, role) {
 async function performAutoSummary(chat, chatUser, role) {
     document.getElementById('chat-title-status').innerText = "正在整理记忆…";
     
-    // Get context (Interval * 4 messages to be safe)
     const lookback = parseInt(currentChatConfig.summaryInterval) * 4;
     const recentMsgs = chat.messages.slice(-lookback); 
     const textToSummarize = recentMsgs.map(m => `${m.sender}: ${m.content}`).join("\n");
@@ -661,18 +694,15 @@ async function performAutoSummary(chat, chatUser, role) {
     ]);
     
     if(summary) {
-        // Update State
         currentChatConfig.summaryContent = summary;
         chat.settings.summaryContent = summary;
         chat.lastSummaryMsgCount = chat.messages.length;
         
-        // UI Update
         document.getElementById('chat-summary-content').value = summary;
         saveChatData();
         
         document.getElementById('chat-title-status').innerText = "记忆已更新";
         setTimeout(() => {
-             // If status hasn't changed by another process, clear it
              if(document.getElementById('chat-title-status').innerText === "记忆已更新") {
                  document.getElementById('chat-title-status').innerText = "";
              }
@@ -692,6 +722,12 @@ function toggleChatSidebar() {
     const sidebar = document.getElementById('chat-sidebar');
     const overlay = document.getElementById('chat-sidebar-overlay');
     
+    // 侧边栏关闭时，如果下拉菜单还开着，也顺便关掉
+    const wbDropdown = document.getElementById('wb-dropdown-list');
+    if(wbDropdown && !wbDropdown.classList.contains('hidden')) {
+        wbDropdown.classList.add('hidden');
+    }
+    
     if(sidebar.classList.contains('open')) {
         sidebar.classList.remove('open');
         overlay.classList.add('hidden');
@@ -700,6 +736,24 @@ function toggleChatSidebar() {
         overlay.classList.remove('hidden');
     }
 }
+
+// [修改] 世界书下拉菜单切换逻辑
+function toggleWbDropdown() {
+    const dropdown = document.getElementById('wb-dropdown-list');
+    dropdown.classList.toggle('hidden');
+}
+
+// 全局点击监听，处理点击外部关闭世界书下拉框
+document.addEventListener('click', function(event) {
+    const dropdown = document.getElementById('wb-dropdown-list');
+    const trigger = document.querySelector('.select-box'); 
+    // 如果点击的不是下拉框本身，也不是触发按钮，且下拉框是打开的
+    if (dropdown && !dropdown.classList.contains('hidden')) {
+        if (!dropdown.contains(event.target) && !trigger.contains(event.target)) {
+            dropdown.classList.add('hidden');
+        }
+    }
+});
 
 function initSidebarValues() {
     // 1. User Profile Select
@@ -714,23 +768,51 @@ function initSidebarValues() {
     });
     userSelect.onchange = (e) => updateChatSetting('activeProfileIdx', e.target.value);
 
-    // 2. World Book Select (Based on ACTIVE USER PROFILE)
-    const wbSelect = document.getElementById('chat-world-select');
-    wbSelect.innerHTML = `<option value="off">不启用</option>`;
+    // 2. [修改] World Book Dropdown List (Checkbox inside)
+    const wbDropdownContainer = document.getElementById('wb-dropdown-list');
+    wbDropdownContainer.innerHTML = ""; // Clear existing
     
     const targetUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
+    let selectedCount = 0;
+
     if(targetUser.worldBooks) {
         targetUser.worldBooks.forEach((wb, idx) => {
             if(wb.isEnabled !== false) {
-                const opt = document.createElement('option');
-                opt.value = idx;
-                opt.innerText = `条目 #${idx+1} (${wb.content.substring(0,10)}...)`;
-                if(idx == currentChatConfig.activeWorldBookIdx) opt.selected = true;
-                wbSelect.appendChild(opt);
+                const isChecked = currentChatConfig.activeWorldBookIndices.includes(idx);
+                if(isChecked) selectedCount++;
+                
+                const div = document.createElement('div');
+                div.style.padding = '8px 10px';
+                div.style.borderBottom = '1px solid #f0f0f0';
+                div.style.display = 'flex';
+                div.style.alignItems = 'center';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = isChecked;
+                checkbox.style.marginRight = '10px';
+                checkbox.style.transform = 'scale(1.2)';
+                checkbox.onchange = (e) => toggleWorldBookSelection(idx, e.target.checked);
+                
+                const label = document.createElement('span');
+                label.innerText = `条目 #${idx+1}: ${wb.content.substring(0,15)}${wb.content.length>15?'...':''}`;
+                label.style.fontSize = '0.9rem';
+                label.style.flex = '1';
+                // 点击文字也能切换
+                label.onclick = () => { checkbox.click(); };
+                
+                div.appendChild(checkbox);
+                div.appendChild(label);
+                wbDropdownContainer.appendChild(div);
             }
         });
+        if(targetUser.worldBooks.length === 0) {
+            wbDropdownContainer.innerHTML = "<div style='padding:10px; color:#999;font-size:0.8rem; text-align:center;'>暂无世界书条目</div>";
+        }
     }
-    wbSelect.onchange = (e) => updateChatSetting('activeWorldBookIdx', e.target.value);
+    
+    // 更新触发按钮上的文字
+    updateWbTriggerText(selectedCount);
 
     // 3. Inputs
     document.getElementById('chat-bg-input').value = currentChatConfig.bg;
@@ -744,6 +826,27 @@ function initSidebarValues() {
     sumInterval.onchange = (e) => updateChatSetting('summaryInterval', e.target.value);
 }
 
+function updateWbTriggerText(count) {
+    const textSpan = document.getElementById('wb-selected-text');
+    if(count === 0) textSpan.innerText = "未选择世界书";
+    else textSpan.innerText = `已启用 ${count} 个条目`;
+}
+
+// [修改] 处理世界书多选切换
+function toggleWorldBookSelection(idx, isChecked) {
+    let indices = currentChatConfig.activeWorldBookIndices;
+    if (isChecked) {
+        if (!indices.includes(idx)) indices.push(idx);
+    } else {
+        indices = indices.filter(i => i !== idx);
+    }
+    // Update config
+    updateChatSetting('activeWorldBookIndices', indices);
+    
+    // Update UI text immediately
+    updateWbTriggerText(indices.length);
+}
+
 function updateChatSetting(key, value) {
     const chat = chats.find(c => c.id === currentChatId);
     if(!chat) return;
@@ -753,7 +856,10 @@ function updateChatSetting(key, value) {
     currentChatConfig[key] = value;
     
     // Map simplified keys to settings object
-    if(key === 'activeWorldBookIdx') chat.settings.wbIdx = value;
+    if(key === 'activeWorldBookIndices') {
+        chat.settings.wbIndices = value; // Save array
+        chat.settings.wbIdx = "off"; // Legacy clear
+    }
     else if(key === 'activeProfileIdx') chat.settings.profileIdx = value;
     else chat.settings[key] = value;
     
@@ -761,6 +867,10 @@ function updateChatSetting(key, value) {
 
     // If profile changed, need to refresh worldbook list and messages
     if(key === 'activeProfileIdx') {
+        // Reset WB selection when switching user (as WBs are user-specific)
+        currentChatConfig.activeWorldBookIndices = [];
+        chat.settings.wbIndices = [];
+        
         initSidebarValues(); // refresh wb list
         renderMessages(); // refresh avatars
     }
@@ -784,9 +894,8 @@ function clearChatHistory() {
 
 // --- Sticker System ---
 
-// 修改这个函数，接收 event
 function toggleStickerPanel(event) {
-    if(event) event.stopPropagation(); // 阻止冒泡
+    if(event) event.stopPropagation();
 
     const panel = document.getElementById('sticker-panel');
     
@@ -798,16 +907,53 @@ function toggleStickerPanel(event) {
     }
 }
 
+// [修改 1] 表情包渲染逻辑，增加长按事件
 function renderStickerGrid() {
     const grid = document.getElementById('sticker-grid');
     grid.innerHTML = "";
-    stickers.forEach(s => {
+    stickers.forEach((s, index) => {
         const img = document.createElement('img');
         img.className = "sticker-option";
         img.src = s.src;
+        
+        // 点击发送
         img.onclick = () => sendSticker(s);
+        
+        // 长按删除 (Touch)
+        let pressTimer;
+        img.ontouchstart = (e) => { 
+            pressTimer = setTimeout(() => { 
+                openStickerMenu(index);
+                if(navigator.vibrate) navigator.vibrate(50);
+            }, 600); 
+        };
+        img.ontouchend = () => clearTimeout(pressTimer);
+        
+        // 长按删除 (Mouse)
+        img.onmousedown = () => { pressTimer = setTimeout(() => openStickerMenu(index), 600); };
+        img.onmouseup = () => clearTimeout(pressTimer);
+        
         grid.appendChild(img);
     });
+}
+
+// [修改 1] 表情包删除菜单逻辑
+function openStickerMenu(index) {
+    targetStickerIndex = index;
+    document.getElementById('sticker-menu-modal').classList.remove('hidden');
+}
+
+function closeStickerMenu() {
+    targetStickerIndex = -1;
+    document.getElementById('sticker-menu-modal').classList.add('hidden');
+}
+
+function confirmDeleteSticker() {
+    if (targetStickerIndex === -1) return;
+    stickers.splice(targetStickerIndex, 1);
+    saveChatData();
+    renderStickerGrid();
+    closeStickerMenu();
 }
 
 function handleStickerUpload(input) {
@@ -847,14 +993,13 @@ function formatTimeShort(ts) {
     const date = new Date(ts);
     return `${date.getHours()}:${date.getMinutes().toString().padStart(2,'0')}`;
 }
+
 // 全局监听：点击空白处关闭表情包面板
 document.addEventListener('click', (e) => {
     const panel = document.getElementById('sticker-panel');
-    const btn = document.getElementById('sticker-toggle-btn'); // 刚才HTML里加的ID
+    const btn = document.getElementById('sticker-toggle-btn');
     
-    // 如果面板是打开的
     if (!panel.classList.contains('hidden')) {
-        // 且点击的目标既不是面板内部，也不是按钮本身
         if (!panel.contains(e.target) && e.target !== btn) {
             panel.classList.add('hidden');
         }
