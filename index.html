@@ -41,7 +41,44 @@
             /* 删除了 background-color: inherit; */
         }
         
-        /* 删除了 #chat-room-page .sys-top-bar 的整段样式，因为它会强制改白色 */
+        /* === 修复导航栏被顶走的问题 START === */
+        
+        /* 1. 锁死聊天页面容器，让它占满屏幕，不再整体滚动 */
+        #chat-room-page {
+            display: flex;            /* 开启弹性布局 */
+            flex-direction: column;   /* 垂直排列：上-中-下 */
+            height: 100vh;           /* 兼容旧浏览器 */
+            height: 100dvh;          /* 核心：使用动态视口高度，适应手机键盘 */
+            overflow: hidden;         /* 禁止整个页面滚动 */
+            position: fixed;          /* 强制固定在屏幕上 */
+            top: 0;
+            left: 0;
+            width: 100%;
+        }
+
+        /* 2. 确保中间的消息区域自动撑满，并且只有它能滚动 */
+        #chat-room-page #chat-msg-container {
+            flex: 1;                 /* 占据剩余所有空间 */
+            overflow-y: auto;         /* 允许垂直滚动 */
+            height: 0;               /* 配合 flex:1 必须设置，防止被内容强行撑大 */
+            -webkit-overflow-scrolling: touch; /* 让滚动丝滑 */
+        }
+
+        /* 3. 防止顶部导航栏被压缩 */
+        #chat-room-page .sys-top-bar {
+            flex-shrink: 0;          /* 禁止缩放 */
+            position: relative;       /* 不需要 sticky 了，因为父容器不滚动 */
+            z-index: 1001;
+        }
+
+        /* 4. 防止底部输入框被压缩 */
+        #chat-room-page .chat-footer-area {
+            flex-shrink: 0;          /* 禁止缩放 */
+            background: #e6ebf0;      /* 确保背景色盖住后面的内容 */
+            z-index: 1001;
+        }
+
+        /* === 修复导航栏被顶走的问题 END === */
     </style>
 </head>
 <body>
