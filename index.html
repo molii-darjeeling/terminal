@@ -20,6 +20,29 @@
 
     <!-- 引用外部样式表 -->
     <link rel="stylesheet" href="style.css">
+
+    <!-- [修改] 针对本次修改要求的样式覆盖 -->
+    <style>
+        /* Req 2: 私聊输入框去除灰色滚动条样式，但保留滑动功能 */
+        .chat-textarea {
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE/Edge */
+        }
+        .chat-textarea::-webkit-scrollbar {
+            display: none; /* Chrome/Safari/Webkit */
+        }
+
+        /* Req 3: 顶部导航栏固定 */
+        .sys-top-bar {
+            position: -webkit-sticky; /* Safari */
+            position: sticky;
+            top: 0;
+            z-index: 1000; /* 确保在最上层 */
+            /* 删除了 background-color: inherit; */
+        }
+        
+        /* 删除了 #chat-room-page .sys-top-bar 的整段样式，因为它会强制改白色 */
+    </style>
 </head>
 <body>
 
