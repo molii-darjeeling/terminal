@@ -849,6 +849,7 @@ function initSidebarValues() {
     // 3. Inputs
     document.getElementById('chat-bg-input').value = currentChatConfig.bg;
     document.getElementById('chat-history-limit').value = currentChatConfig.historyLimit;
+    document.getElementById('chat-history-limit').onchange = (e) => updateChatSetting('historyLimit', e.target.value);
 
     // 4. Summary Listeners
     const sumToggle = document.getElementById('chat-summary-toggle');
