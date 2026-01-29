@@ -69,13 +69,7 @@ let longPressTargetChatId = null;
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     loadChatData();
-   const sendBtn = document.querySelector('.send-btn');
-    if(sendBtn) {
-        sendBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // 核心：阻止失去焦点，键盘就不会收起了
-            sendUserMessage();  // 手动触发发送
-        });
-    }
+   const sendBtn = document.querySelector('.send-btn'); if(sendBtn) { // 1. 拦截 mousedown：这是解决“键盘闪烁”的关键！ // 它防止了点击按钮时，浏览器默认让输入框失焦的行为。 sendBtn.addEventListener('mousedown', (e) => { e.preventDefault(); }); // 2. 拦截 touchstart：手机端的触摸事件 // 同样阻止默认行为（防止触发随后的点击），并手动执行发送 sendBtn.addEventListener('touchstart', (e) => { e.preventDefault(); sendUserMessage(); }); }
     // Pre-load stickers if empty
     if(stickers.length === 0) {
         stickers = [
