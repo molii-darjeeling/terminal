@@ -602,7 +602,7 @@ async function callAI(messages, signal = null) { // <--- 增加了 signal 参数
             body: JSON.stringify({
                 model: config.model,
                 messages: messages,
-                max_tokens: 3000,
+                max_tokens: 6000,
                 temperature: 0.9,
                 stream: false
             })
