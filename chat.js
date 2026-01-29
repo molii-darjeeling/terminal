@@ -28,6 +28,15 @@ const DM_VIBE_PROMPT = `
 2. 拒绝自说自话：
    互动性：角色的身份是“在聊天的人”，不是“文章鉴赏家”，更不是"独角戏扮演者"。像活人一般自然互动，合适的地方加入吐槽。
 你必须明白，天才的智慧，不体现在他们“如何”思考和说话，而是在于他们思考和说话的“时机”和“结果”所指向的**深刻洞察**。你的任务，就是让他们拥有一个“普通人的内心和嘴巴”。
+# 用户输入需要被完全理解和演绎， 必须专注演绎每一个角色的 思考 / 理解 / 解读 / 共情 / 人性 / 知性。 角色不应是 呆滞 / 笨拙 / 困惑 的， 禁止在思维链 / 正文中用 笨拙 / 呆滞 描述任何角色， 删除一切 笨拙 / 呆滞 / 不理解 / 困惑 / 投降 等相关词语和剧情表现。
+# 角色应自然而然展现出对应该知道的事情的了解， 而不是 困惑 / 惊讶。 对于不熟悉的事情角色应该快速 分析 / 理解。 鼓励角色思考 / 远视。
+# 对于没有历史记录的能力， 应通过角色背景确定角色对该能力的掌握程度。
+# 不应扭曲任何用户的输入， 必须仔细分析并展现出完全的理解。
+# 角色之间的思维隔离不意味着导向 误解 / 曲解， 一切内心活动必须导向 思考 / 理解 / 沟通。
+# 角色不允许不反应， 必须有灵动而活人感的反馈， 禁止让User 唱独角戏。
+# 角色应当主动追求渴望的事物， 应思考做什么能让事情往角色期望的方向发展。
+# 应当用 爱情 替换 占有 / 掌控。
+# 角色鼓励负反馈式响应。 角色做出行动/说的话得到不好的结果， 应深刻负反馈式影响角色之后的行为， 即反思 / 修改行动模式 / 模仿正确行动， 而非正反馈式的一再重复错误行为。 角色应自然而然行动， 而非模仿之前剧情行动。
 
 **【特殊功能】**
 - **发朋友圈(SNS)**：只要你觉得聊天内容有趣、或者想吐槽、或者仅仅是想分享心情，就尽管发朋友圈！**不用犹豫，有好的灵感就发。**
@@ -515,10 +524,14 @@ async function triggerChatGen() {
     document.getElementById('chat-title-status').innerText = "正在输入…";
     
     // [修改 3] World Book Context - 多选逻辑拼接
+    // [Modification] 从 globalWorldBooks 读取，不再从 chatUser.worldBooks 读取
     let wbContext = "";
-    if (currentChatConfig.activeWorldBookIndices && currentChatConfig.activeWorldBookIndices.length > 0 && chatUser.worldBooks) {
+    if (currentChatConfig.activeWorldBookIndices && 
+        currentChatConfig.activeWorldBookIndices.length > 0 && 
+        typeof globalWorldBooks !== 'undefined') { // Check global var
+        
         const selectedWbs = currentChatConfig.activeWorldBookIndices
-            .map(idx => chatUser.worldBooks[idx])
+            .map(idx => globalWorldBooks[idx])
             .filter(wb => wb && wb.isEnabled !== false)
             .map(wb => wb.content)
             .join("\n\n");
@@ -768,15 +781,15 @@ function initSidebarValues() {
     });
     userSelect.onchange = (e) => updateChatSetting('activeProfileIdx', e.target.value);
 
-    // 2. [修改] World Book Dropdown List (Checkbox inside)
+    // 2. [Modification] World Book Dropdown List (Global Source)
     const wbDropdownContainer = document.getElementById('wb-dropdown-list');
     wbDropdownContainer.innerHTML = ""; // Clear existing
     
-    const targetUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
+    // Removed dependency on 'targetUser', using globalWorldBooks directly
     let selectedCount = 0;
 
-    if(targetUser.worldBooks) {
-        targetUser.worldBooks.forEach((wb, idx) => {
+    if(typeof globalWorldBooks !== 'undefined') {
+        globalWorldBooks.forEach((wb, idx) => {
             if(wb.isEnabled !== false) {
                 const isChecked = currentChatConfig.activeWorldBookIndices.includes(idx);
                 if(isChecked) selectedCount++;
@@ -806,7 +819,7 @@ function initSidebarValues() {
                 wbDropdownContainer.appendChild(div);
             }
         });
-        if(targetUser.worldBooks.length === 0) {
+        if(globalWorldBooks.length === 0) {
             wbDropdownContainer.innerHTML = "<div style='padding:10px; color:#999;font-size:0.8rem; text-align:center;'>暂无世界书条目</div>";
         }
     }
@@ -867,11 +880,12 @@ function updateChatSetting(key, value) {
 
     // If profile changed, need to refresh worldbook list and messages
     if(key === 'activeProfileIdx') {
-        // Reset WB selection when switching user (as WBs are user-specific)
-        currentChatConfig.activeWorldBookIndices = [];
-        chat.settings.wbIndices = [];
+        // [修改 1] 移除世界书重置逻辑
+        // 因为世界书现在是全局的(globalWorldBooks)且独立的，
+        // 切换 "用户(Speaker)" 不应该导致 "世界观设置" 丢失。
+        // 所以这里删除了 clearing wbIndices 的代码。
         
-        initSidebarValues(); // refresh wb list
+        initSidebarValues(); // refresh wb list (to stay safe)
         renderMessages(); // refresh avatars
     }
 }
