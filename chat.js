@@ -541,9 +541,27 @@ async function triggerChatGen() {
         }
     }
     
-    const otherRoles = roles.filter(r => r.id !== role.id && r.isEnabled !== false);
-    const gossipRoles = otherRoles.sort(() => 0.5 - Math.random()).slice(0, 5);
-    const gossipText = gossipRoles.map(r => `${r.name} (${r.id}): ${r.persona.substring(0, 50)}...`).join("\n");
+    const recentContentForSearch = chat.messages.slice(-5).map(m => m.content).join(" ");
+    const searchScope = (role.persona + " " + recentContentForSearch).toLowerCase();
+
+    // 2. 遍历通讯录，查找被提及的角色
+    const detectedRoles = roles.filter(r => {
+        // 排除自己、排除被禁用的
+        if (r.id === role.id || r.isEnabled === false) return false;
+        
+        // 核心判断：如果名字出现在搜索范围内
+        if (searchScope.includes(r.name.toLowerCase())) {
+            return true;
+        }
+        return false;
+    });
+
+    // 3. 生成文本 (如果没有匹配到人，这里就是空的，完全不费Token)
+    const gossipText = detectedRoles.map(r => {
+        // 这里我放开了字数限制，因为是精准匹配的，通常值得读取完整设定
+        // 如果你觉得太费 Token，可以把 r.persona 改成 r.persona.substring(0, 100)
+        return `[RELEVANT CHARACTER]:\nName: ${r.name} (${r.id})\nPersona: ${r.persona}`;
+    }).join("\n\n");
     
     const historyLimit = parseInt(currentChatConfig.historyLimit) || 20;
     const recentMsgs = chat.messages.slice(-historyLimit);
