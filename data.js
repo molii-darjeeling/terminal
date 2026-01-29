@@ -642,8 +642,8 @@ const HELIOS_WORLD_CONFIG = `
 1. Central Square (セントラルスクエア):
    城市核心，最繁华。
    地标：Helios Tower(エリオスタワー) (210层)。
-   - 低层(1-100)：商业设施，市民可进入。
-   - 高层：Hero 活动据点。内有 Gym(健身房)、Shared Kitchen(公用厨房)、Command Room(司令室)、Lab(实验室)。生活设施完备，Hero 几乎无需外出即可生活。
+   - 低层(1-100)：商业设施，展望台等，一般市民可进入。
+   - 高层：Hero和Helios相关者活动据点。内有健身房、公用厨房、司令室、实验室等等。生活设施完备，Hero几乎无需外出即可生活。
    - 地下：Terminal。
 
 2. Red South Street (レッドサウス/サウスセクター):
