@@ -67,13 +67,16 @@ let config = { url: "https://api.openai.com/v1", key: "", model: "gpt-4o-mini" }
 let userProfiles = [];
 let currentProfileIndex = 0;
 
+// [修改 1] 新增：全局世界书变量 (不再绑定在 user 对象内)
+let globalWorldBooks = [];
+
 let user = { 
     name: "司令", 
     id: "@helios_cmdr", 
     avatar: "https://files.catbox.moe/pq5tub.jpg", 
     persona: "话少可靠的指挥官。", 
-    worldBooks: [],
-    profileName: "Default" // Internal name for the profile
+    // worldBooks: [], // [修改 1] 从 User 结构中移除绑定，改为读取全局变量
+    profileName: "Default" 
 };
 
 let roles = []; 
@@ -100,6 +103,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function saveAllData() {
     localStorage.setItem('helios_config', JSON.stringify(config));
     
+    // [修改 1] 保存全局世界书
+    localStorage.setItem('helios_global_worldbooks', JSON.stringify(globalWorldBooks));
+
     // Sync current user to profiles array
     userProfiles[currentProfileIndex] = JSON.parse(JSON.stringify(user));
     localStorage.setItem('helios_user_profiles', JSON.stringify(userProfiles));
@@ -112,6 +118,11 @@ function saveAllData() {
 function loadAllData() {
     if(localStorage.getItem('helios_config')) config = JSON.parse(localStorage.getItem('helios_config'));
     
+    // [修改 1] 加载全局世界书
+    if(localStorage.getItem('helios_global_worldbooks')) {
+        globalWorldBooks = JSON.parse(localStorage.getItem('helios_global_worldbooks'));
+    }
+
     // Multi-profile migration & load
     if(localStorage.getItem('helios_user_profiles')) {
         userProfiles = JSON.parse(localStorage.getItem('helios_user_profiles'));
@@ -122,13 +133,22 @@ function loadAllData() {
         // Fallback for old data or new user
         if(localStorage.getItem('helios_user')) {
             let u = JSON.parse(localStorage.getItem('helios_user'));
-            if (typeof u.worldBook === 'string' && u.worldBook) {
-                u.worldBooks = [{ content: u.worldBook, isEnabled: true }];
-                delete u.worldBook;
+            
+            // [数据迁移] 如果是旧用户数据，且有 worldBook，迁移到全局变量 (仅当全局为空时)
+            if (globalWorldBooks.length === 0) {
+                if (typeof u.worldBook === 'string' && u.worldBook) {
+                    globalWorldBooks = [{ content: u.worldBook, isEnabled: true }];
+                } else if (Array.isArray(u.worldBooks) && u.worldBooks.length > 0) {
+                    // 确保有 isEnabled
+                    u.worldBooks.forEach(w => { if(w.isEnabled === undefined) w.isEnabled = true; });
+                    globalWorldBooks = u.worldBooks;
+                }
             }
-            if (!u.worldBooks) u.worldBooks = [];
-            // Ensure worldBooks have isEnabled
-            u.worldBooks.forEach(w => { if(w.isEnabled === undefined) w.isEnabled = true; });
+            
+            // 清理旧数据中的 worldBooks 字段 (可选，为了干净)
+            delete u.worldBook;
+            delete u.worldBooks;
+
             u.profileName = "默认档案";
             user = u;
         }
@@ -136,9 +156,8 @@ function loadAllData() {
         currentProfileIndex = 0;
     }
 
-    // Ensure current user worldbooks structure
-    if (!user.worldBooks) user.worldBooks = [];
-    user.worldBooks.forEach(w => { if(w.isEnabled === undefined) w.isEnabled = true; });
+    // [兜底] 如果加载后 user 还是带了 worldBooks (来自 profiles 缓存)，也可以在这里清理或忽略
+    // 为了防止逻辑混乱，我们在 UI 渲染时只读 globalWorldBooks
 
     if(localStorage.getItem('helios_roles')) {
         roles = JSON.parse(localStorage.getItem('helios_roles'));
@@ -169,7 +188,8 @@ function exportData() {
         user_profiles: JSON.stringify(userProfiles),
         current_profile_idx: currentProfileIndex,
         roles: localStorage.getItem('helios_roles'),
-        posts: localStorage.getItem('helios_posts')
+        posts: localStorage.getItem('helios_posts'),
+        global_worldbooks: JSON.stringify(globalWorldBooks) // [修改 1] 导出包含世界书
     };
     const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
     const url = URL.createObjectURL(blob);
@@ -182,35 +202,82 @@ function exportData() {
 
 function importData(input) {
     const file = input.files[0];
-    if(!file) return;
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            if(data.config) localStorage.setItem('helios_config', data.config);
             
-            if(data.user_profiles) {
+            // 1. 恢复基础配置
+            if (data.config) localStorage.setItem('helios_config', data.config);
+            
+            // 2. [关键修改] 智能处理世界书导入
+            // 情况A：这是新版备份，直接有 global_worldbooks
+            if (data.global_worldbooks) {
+                localStorage.setItem('helios_global_worldbooks', data.global_worldbooks);
+            }
+            // 情况B：这是旧版备份，数据还在 User 里，需要提取出来
+            else {
+                let extractedBooks = [];
+                
+                // 尝试从 user_profiles (多存档版本) 中提取
+                if (data.user_profiles) {
+                    try {
+                        const profiles = JSON.parse(data.user_profiles);
+                        // 默认提取第一个用户的世界书
+                        if (profiles && profiles.length > 0 && profiles[0].worldBooks) {
+                            extractedBooks = profiles[0].worldBooks;
+                        }
+                    } catch (e) {}
+                }
+                // 尝试从 user (单用户旧版本) 中提取
+                else if (data.user) {
+                    try {
+                        const u = JSON.parse(data.user);
+                        if (u.worldBooks) {
+                            extractedBooks = u.worldBooks;
+                        } else if (u.worldBook) { // 极早期的纯文本格式
+                            extractedBooks = [{ content: u.worldBook, isEnabled: true }];
+                        }
+                    } catch (e) {}
+                }
+                
+                // 如果提取到了旧数据，保存为全局新数据
+                if (extractedBooks.length > 0) {
+                    // 确保所有条目都有 isEnabled 属性
+                    extractedBooks.forEach(w => { if (w.isEnabled === undefined) w.isEnabled = true; });
+                    localStorage.setItem('helios_global_worldbooks', JSON.stringify(extractedBooks));
+                }
+            }
+            
+            // 3. 恢复用户数据
+            if (data.user_profiles) {
                 localStorage.setItem('helios_user_profiles', data.user_profiles);
                 localStorage.setItem('helios_current_profile_idx', data.current_profile_idx || 0);
             } else if (data.user) {
-                // Legacy import
+                // 旧版单用户兼容
                 let u = JSON.parse(data.user);
+                // 清理掉旧数据里的 worldBooks 以免混淆（可选）
+                delete u.worldBooks;
+                delete u.worldBook;
                 u.profileName = "Imported";
                 localStorage.setItem('helios_user_profiles', JSON.stringify([u]));
                 localStorage.setItem('helios_current_profile_idx', 0);
             }
-
-            if(data.roles) localStorage.setItem('helios_roles', data.roles);
-            if(data.posts) localStorage.setItem('helios_posts', data.posts);
-            alert("导入成功，页面即将刷新");
+            
+            // 4. 恢复其他数据
+            if (data.roles) localStorage.setItem('helios_roles', data.roles);
+            if (data.posts) localStorage.setItem('helios_posts', data.posts);
+            
+            alert("导入成功，世界书已自动迁移到全局设置，页面即将刷新");
             location.reload();
-        } catch(err) {
+        } catch (err) {
             alert("文件格式错误，无法读取");
             console.error(err);
         }
     };
     reader.readAsText(file);
-    input.value = ''; 
+    input.value = '';
 }
 
 // --- 外部系统导航 ---
@@ -279,7 +346,9 @@ function switchProfile(index) {
     // Let's reload user from array
     currentProfileIndex = parseInt(index);
     user = userProfiles[currentProfileIndex];
-    if (!user.worldBooks) user.worldBooks = []; // Safety
+    
+    // [修改 1] 切换用户时不再处理 worldBooks，因为它是全局的
+    
     loadProfileToEditInputs();
     updateUserCardUI(); // Reflect change immediately
     saveAllData(); // Persist switch
@@ -291,7 +360,7 @@ function createNewProfile() {
         id: "@new_user",
         avatar: "",
         persona: "",
-        worldBooks: [],
+        // worldBooks: [], // [修改 1] 新用户不再初始化 worldBooks
         profileName: "新档案"
     };
     userProfiles.push(newProfile);
@@ -403,10 +472,14 @@ function deleteRole(idx) {
 }
 
 // --- World Book Logic (With Toggle) ---
+// [修改 1] 以下世界书函数全部改为操作 globalWorldBooks
+
 function renderWorldPage() {
     const container = document.getElementById('worldbook-list');
     container.innerHTML = "";
-    user.worldBooks.forEach((wb, idx) => {
+    
+    // Use globalWorldBooks
+    globalWorldBooks.forEach((wb, idx) => {
         const div = document.createElement('div');
         div.className = 'wb-item';
         
@@ -427,17 +500,32 @@ function renderWorldPage() {
         container.appendChild(div);
     });
 }
+
 function toggleWorldBook(idx) {
-    if(user.worldBooks[idx].isEnabled === undefined) user.worldBooks[idx].isEnabled = true;
-    user.worldBooks[idx].isEnabled = !user.worldBooks[idx].isEnabled;
+    if(globalWorldBooks[idx].isEnabled === undefined) globalWorldBooks[idx].isEnabled = true;
+    globalWorldBooks[idx].isEnabled = !globalWorldBooks[idx].isEnabled;
     renderWorldPage();
 }
-function addWorldBookItem() { user.worldBooks.push({ content: "", isEnabled: true }); renderWorldPage(); }
-function updateWorldBook(idx, val) { user.worldBooks[idx].content = val; }
-function deleteWorldBook(idx) { if(confirm("删除此条目？")) { user.worldBooks.splice(idx, 1); renderWorldPage(); } }
+
+function addWorldBookItem() { 
+    globalWorldBooks.push({ content: "", isEnabled: true }); 
+    renderWorldPage(); 
+}
+
+function updateWorldBook(idx, val) { 
+    globalWorldBooks[idx].content = val; 
+}
+
+function deleteWorldBook(idx) { 
+    if(confirm("删除此条目？")) { 
+        globalWorldBooks.splice(idx, 1); 
+        renderWorldPage(); 
+    } 
+}
+
 function saveWorldPage() { 
-    // Save logic remains, but we don't filter out empty ones instantly to avoid bad UX
-    user.worldBooks = user.worldBooks.filter(w => w.content.trim() !== ""); 
+    // Save logic remains, filter empty
+    globalWorldBooks = globalWorldBooks.filter(w => w.content.trim() !== ""); 
     saveAllData(); 
 }
 
