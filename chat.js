@@ -514,20 +514,32 @@ function closeFloatingMenu() {
     setTimeout(() => { window.globalLongPressActive = false; }, 100); 
 }
 
-function copyMsg() {
-    let sel = window.getSelection();
-    let text = sel.toString().trim();
+function copyMsg(e) {
+    if (e) e.stopPropagation(); // 阻止点击事件乱跑
     
-    if (!text) {
+    let sel = window.getSelection();
+    let text = sel ? sel.toString().trim() : "";
+    
+    // 如果没有手选文字，就直接获取整个气泡的内容
+    if (!text && currentChatId && targetMsgIndex !== -1) {
         const chat = chats.find(c => c.id === currentChatId);
         if (chat && chat.messages[targetMsgIndex]) {
             text = chat.messages[targetMsgIndex].content;
+            // 清理可能带有的语音前缀
             if (text.startsWith('[语音]')) text = text.replace(/^\[语音\]\s*/, '').trim();
         }
     }
     
+    if (!text) {
+        closeFloatingMenu();
+        return;
+    }
+    
+    // 写入剪贴板并弹窗提示
     if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(text).then(() => showToast('已复制')).catch(() => fallbackCopy(text));
+        navigator.clipboard.writeText(text)
+            .then(() => { showToast('已复制'); })
+            .catch(() => { fallbackCopy(text); });
     } else {
         fallbackCopy(text);
     }
