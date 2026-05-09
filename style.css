@@ -764,8 +764,11 @@ input, textarea, select {
     display: block !important; /* 覆盖原始 hidden 的 display:none 保证动画生效 */
     pointer-events: none;
 }
-.chat-bubble-content {
-    -webkit-touch-callout: none !important; /* 禁用 iOS 的原生长按弹出 */
-    -webkit-user-select: none !important;   /* 禁用长按选中文本 */
-    user-select: none !important;           /* 禁用长按选中文本 */
+/* 彻底禁用手机系统默认的长按选中、放大镜、双击缩放和原生菜单 */
+.chat-bubble-content, .chat-bubble-content * {
+    -webkit-touch-callout: none !important; 
+    -webkit-user-select: none !important;   
+    user-select: none !important;           
+    touch-action: pan-y !important; /* 极其关键：告诉系统这个区域只允许上下滑动，绝对禁止双击缩放和长按放大镜！ */
+    -webkit-tap-highlight-color: transparent !important; /* 消除安卓点击时的灰色阴影 */
 }
