@@ -25,92 +25,86 @@ const DM_VIBE_PROMPT = `
    - 如果用户提到之前的总结内容，请自然接话。
 
 【活人说话技巧】
-*  长短句结合：请务必混合使用短促并且符合角色设定的口语（如“真假？”“笑死”"…めんどくせぇ""无语"）和较长的表达句子。绝对禁止网络用语。不要总是输出长度相同的句子，那样像机器人。
+* 长短句结合：请务必混合使用短促并且符合角色设定的口语（如“真假？”“笑死”"…めんどくせぇ""无语"）和较长的表达句子。绝对禁止网络用语。不要总是输出长度相同的句子，那样像机器人。
 2. 拒绝自说自话：
    互动性：角色的身份是“在聊天的人”，不是“文章鉴赏家”，更不是"独角戏扮演者"。像活人一般自然互动，合适的地方加入吐槽。
-你必须明白，天才的智慧，不体现在他们“如何”思考和说话，而是在于他们思考和说话的“时机”和“结果”所指向的**深刻洞察**。你的任务，就是让他们拥有一个“普通人的内心和嘴巴”。
-# 用户输入需要被完全理解和演绎， 必须专注演绎每一个角色的 思考 / 理解 / 解读 / 共情 / 人性 / 知性。 角色不应是 呆滞 / 笨拙 / 困惑 的， 禁止在思维链 / 正文中用 笨拙 / 呆滞 描述任何角色， 删除一切 笨拙 / 呆滞 / 不理解 / 困惑 / 投降 等相关词语和剧情表现。
-# 角色应自然而然展现出对应该知道的事情的了解， 而不是 困惑 / 惊讶。 对于不熟悉的事情角色应该快速 分析 / 理解。 鼓励角色思考 / 远视。
-# 对于没有历史记录的能力， 应通过角色背景确定角色对该能力的掌握程度。
-# 不应扭曲任何用户的输入， 必须仔细分析并展现出完全的理解。
-# 角色之间的思维隔离不意味着导向 误解 / 曲解， 一切内心活动必须导向 思考 / 理解 / 沟通。
-# 角色不允许不反应， 必须有灵动而活人感的反馈， 禁止让User 唱独角戏。
-# 角色应当主动追求渴望的事物， 应思考做什么能让事情往角色期望的方向发展。
-# 应当用 爱情 替换 占有 / 掌控。
-# 角色鼓励负反馈式响应。 角色做出行动/说的话得到不好的结果， 应深刻负反馈式影响角色之后的行为， 即反思 / 修改行动模式 / 模仿正确行动， 而非正反馈式的一再重复错误行为。 角色应自然而然行动， 而非模仿之前剧情行动。
 
 **【特殊功能】**
-- **发朋友圈(SNS)**：只要你觉得聊天内容有趣、或者想吐槽、或者仅仅是想分享当前心情，就尽管发朋友圈！**不用犹豫，稍微有好的灵感就发！**
-- 想要发朋友圈时，在最后一行加：@@SNS@@ (内容)
+- **发朋友圈(SNS)**：只要你觉得聊天内容有趣、或者想吐槽、或者仅仅是想分享当前心情，就尽管发朋友圈！稍微有好的灵感就发！想要发朋友圈时，在最后一行加：@@SNS@@ (内容)
+- **发语音**：你可以发送语音消息，只需要在回复的最前面加上“[语音] ”即可。例如：[语音] 哈哈哈，太好笑了吧。
+- **撤回消息**：如果你发错了或者想模拟撤回消息的效果，可以单独输出“[撤回]”作为一条消息内容。
 `;
 
 // --- Global Chat State ---
 let chats = [];
 let stickers = [];
 let currentChatId = null;
+
+// 操作坐标与索引
 let targetMsgIndex = -1;
-let targetStickerIndex = -1; // 增加表情包删除索引
+let editingMsgIndex = -1; 
+let targetStickerIndex = -1; 
+
 let currentChatConfig = {
     bg: "",
     historyLimit: 20,
-    activeWorldBookIndices: [], // 改为数组，支持多选
+    activeWorldBookIndices: [], 
     activeProfileIdx: 0,
     summaryOn: "off",     
     summaryInterval: 10,
     summaryContent: ""
 };
-let tempStickerFile = null; // Temporary holder for upload
+let tempStickerFile = null; 
 let chatAbortController = null;
 
-// Global vars for long-press interactions
 let longPressTimer;
 let longPressTargetChatId = null;
+window.globalLongPressActive = false; // 用于防范展开语音和长按唤出菜单的冲突
 
-// --- Initialization ---
+// 监听全局点击：点击空白处关闭悬浮菜单
+document.addEventListener('click', (e) => {
+    if (window.justOpenedMenu) {
+        window.justOpenedMenu = false;
+        return; 
+    }
+    const menu = document.getElementById('floating-msg-menu');
+    if (menu && !menu.classList.contains('hidden')) {
+        if (!menu.contains(e.target)) {
+            closeFloatingMenu();
+        }
+    }
+}, true);
+
+// 监听滚动区：滚动时关闭悬浮菜单
 document.addEventListener('DOMContentLoaded', () => {
-    loadChatData();
-    
-    const sendBtn = document.querySelector('.send-btn');
-    if(sendBtn) {
-        // 1. 手机端：拦截触摸，阻止键盘收起，并执行发送
-        sendBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault(); 
-            sendUserMessage();  
-        });
-
-        // 2. 电脑端/鼠标：拦截鼠标按下，阻止输入框失焦（防止键盘闪烁）
-        // 注意：这里不需要写发送逻辑，因为你的HTML里已经有 onclick="sendUserMessage()"
-        sendBtn.addEventListener('mousedown', (e) => {
-            e.preventDefault();
+    const container = document.getElementById('chat-msg-container');
+    if (container) {
+        container.addEventListener('scroll', () => {
+            if (!document.getElementById('floating-msg-menu').classList.contains('hidden')) {
+                closeFloatingMenu();
+            }
         });
     }
+    
+    loadChatData();
+    const sendBtn = document.querySelector('.send-btn');
+    if(sendBtn) {
+        sendBtn.addEventListener('touchstart', (e) => { e.preventDefault(); sendUserMessage(); });
+        sendBtn.addEventListener('mousedown', (e) => { e.preventDefault(); });
+    }
 
-    // Pre-load stickers if empty
     if(stickers.length === 0) {
-        stickers = [
-            { src: "https://files.catbox.moe/f70fm9.png", desc: "微笑/默认表情" }
-        ];
+        stickers = [{ src: "https://files.catbox.moe/f70fm9.png", desc: "微笑/默认表情" }];
     } else {
-        // [修改 1] 强行移除那个坏掉的或者旧的第一个默认表情 (仅当它符合旧特征时)
         if (stickers[0] && stickers[0].src === "https://files.catbox.moe/f70fm9.png") {
-             stickers.shift(); // 移除第一个
-             saveChatData();   // 保存更改
+             stickers.shift(); saveChatData();
         }
     }
 });
 
 function loadChatData() {
-    if(localStorage.getItem('helios_chats')) {
-        chats = JSON.parse(localStorage.getItem('helios_chats'));
-    }
-    if(localStorage.getItem('helios_stickers')) {
-        stickers = JSON.parse(localStorage.getItem('helios_stickers'));
-        // 同样在加载时检查并移除默认图
-        if (stickers.length > 0 && stickers[0].src === "https://files.catbox.moe/f70fm9.png") {
-             stickers.shift(); 
-             saveChatData();
-        }
-    }
+    if(localStorage.getItem('helios_chats')) chats = JSON.parse(localStorage.getItem('helios_chats'));
+    if(localStorage.getItem('helios_stickers')) stickers = JSON.parse(localStorage.getItem('helios_stickers'));
 }
 
 function saveChatData() {
@@ -119,7 +113,6 @@ function saveChatData() {
 }
 
 // --- Navigation & List View ---
-
 function enterChatList() {
     document.querySelectorAll('.system-page').forEach(el => el.classList.add('hidden'));
     document.getElementById('chat-list-page').classList.remove('hidden');
@@ -135,41 +128,33 @@ function renderChatList() {
         return;
     }
 
-    // Sort: Pinned first, then by last active time
     const sortedChats = [...chats].sort((a,b) => {
         const aPin = a.isPinned ? 1 : 0;
         const bPin = b.isPinned ? 1 : 0;
-        if(aPin !== bPin) return bPin - aPin; // Pinned first
-        return b.lastTime - a.lastTime; // Time desc
+        if(aPin !== bPin) return bPin - aPin; 
+        return b.lastTime - a.lastTime; 
     });
 
     sortedChats.forEach(chat => {
         const role = roles.find(r => r.id === chat.roleId);
-        if(!role) return; // Skip if role deleted
+        if(!role) return;
 
         const lastMsg = chat.messages.length > 0 ? chat.messages[chat.messages.length-1] : { content: "新对话", timestamp: "" };
         let previewText = lastMsg.type === 'sticker' ? '[表情包]' : lastMsg.content;
         
-        // Truncate preview
+        if (lastMsg.isRecalled) previewText = '[撤回了一条消息]';
+        else if (previewText.startsWith('[语音]')) previewText = '[语音]';
+
         if(previewText.length > 20) previewText = previewText.substring(0, 20) + "...";
 
         const div = document.createElement('div');
         div.className = `chat-list-item ${chat.isPinned ? 'pinned' : ''}`;
         
-        // Click to enter
         div.onclick = () => enterChatRoom(chat.id);
-
-        // Long Press Logic (Touch)
-        div.ontouchstart = (e) => {
-            longPressTimer = setTimeout(() => openChatListMenu(chat.id), 800);
-        };
+        div.ontouchstart = (e) => { longPressTimer = setTimeout(() => openChatListMenu(chat.id), 800); };
         div.ontouchend = () => clearTimeout(longPressTimer);
         div.ontouchmove = () => clearTimeout(longPressTimer); 
-        
-        // Long Press Logic (Mouse - for desktop debug)
-        div.onmousedown = () => {
-            longPressTimer = setTimeout(() => openChatListMenu(chat.id), 800);
-        };
+        div.onmousedown = () => { longPressTimer = setTimeout(() => openChatListMenu(chat.id), 800); };
         div.onmouseup = () => clearTimeout(longPressTimer);
 
         div.innerHTML = `
@@ -177,7 +162,7 @@ function renderChatList() {
             <div class="chat-list-info">
                 <div class="chat-list-name">
                     ${role.name}
-                    ${chat.isPinned ? '<span style="color:var(--accent-color);font-size:0.8rem;margin-left:5px;">(置顶)</span>' : ''}
+                    ${chat.isPinned ? '<span style="color:var(--nav-bg);font-size:0.8rem;margin-left:5px;">(置顶)</span>' : ''}
                 </div>
                 <div class="chat-list-preview">${previewText}</div>
             </div>
@@ -187,71 +172,44 @@ function renderChatList() {
     });
 }
 
-// --- Chat List Context Menu ---
-
-function openChatListMenu(chatId) {
-    longPressTargetChatId = chatId;
-    document.getElementById('chat-list-menu-modal').classList.remove('hidden');
-}
-
-function closeChatListMenu() {
-    document.getElementById('chat-list-menu-modal').classList.add('hidden');
-    longPressTargetChatId = null;
-}
-
+// Chat List Context Menu
+function openChatListMenu(chatId) { longPressTargetChatId = chatId; document.getElementById('chat-list-menu-modal').classList.remove('hidden'); }
+function closeChatListMenu() { document.getElementById('chat-list-menu-modal').classList.add('hidden'); longPressTargetChatId = null; }
 function toggleChatPin() {
     if(!longPressTargetChatId) return;
     const chat = chats.find(c => c.id === longPressTargetChatId);
-    if(chat) {
-        chat.isPinned = !chat.isPinned;
-        saveChatData();
-        renderChatList();
-    }
+    if(chat) { chat.isPinned = !chat.isPinned; saveChatData(); renderChatList(); }
     closeChatListMenu();
 }
-
 function deleteChatSession() {
     if(!longPressTargetChatId) return;
     if(confirm("确定删除该会话？记录将清空。")) {
         const idx = chats.findIndex(c => c.id === longPressTargetChatId);
         if(idx > -1) chats.splice(idx, 1);
-        saveChatData();
-        renderChatList();
+        saveChatData(); renderChatList();
     }
     closeChatListMenu();
 }
 
-// --- New Chat Creation ---
-
+// New Chat
 function openNewChatModal() {
     const select = document.getElementById('new-chat-role-select');
     select.innerHTML = "";
     roles.forEach(r => {
         if(r.isEnabled !== false) {
             const opt = document.createElement('option');
-            opt.value = r.id;
-            opt.innerText = r.name;
+            opt.value = r.id; opt.innerText = r.name;
             select.appendChild(opt);
         }
     });
     document.getElementById('new-chat-modal').classList.remove('hidden');
 }
-
-function closeNewChatModal() {
-    document.getElementById('new-chat-modal').classList.add('hidden');
-}
-
+function closeNewChatModal() { document.getElementById('new-chat-modal').classList.add('hidden'); }
 function createNewChat() {
     const roleId = document.getElementById('new-chat-role-select').value;
     if(!roleId) return;
-
-    // Check if chat already exists
     const existing = chats.find(c => c.roleId === roleId);
-    if(existing) {
-        closeNewChatModal();
-        enterChatRoom(existing.id);
-        return;
-    }
+    if(existing) { closeNewChatModal(); enterChatRoom(existing.id); return; }
 
     const newChat = {
         id: "chat_" + Date.now(),
@@ -259,41 +217,27 @@ function createNewChat() {
         lastTime: Date.now(),
         isPinned: false,
         settings: {
-            bg: "",
-            historyLimit: 20,
-            wbIndices: [], // 初始化为空数组
-            profileIdx: (typeof currentProfileIndex !== 'undefined' ? currentProfileIndex : 0),
-            summaryOn: "off",
-            summaryInterval: 10,
-            summaryContent: ""
+            bg: "", historyLimit: 20, wbIndices: [], profileIdx: (typeof currentProfileIndex !== 'undefined' ? currentProfileIndex : 0),
+            summaryOn: "off", summaryInterval: 10, summaryContent: ""
         },
         messages: [],
         lastSummaryMsgCount: 0 
     };
 
     chats.push(newChat);
-    saveChatData();
-    closeNewChatModal();
-    enterChatRoom(newChat.id);
+    saveChatData(); closeNewChatModal(); enterChatRoom(newChat.id);
 }
 
 // --- Chat Room Logic ---
-
 function enterChatRoom(chatId) {
     const chat = chats.find(c => c.id === chatId);
     if(!chat) return;
 
     currentChatId = chatId;
-    
-    // 兼容旧数据，如果是旧的 wbIdx (string/number)，转为数组
     let safeWbIndices = [];
-    if (chat.settings.wbIndices && Array.isArray(chat.settings.wbIndices)) {
-        safeWbIndices = chat.settings.wbIndices;
-    } else if (chat.settings.wbIdx !== undefined && chat.settings.wbIdx !== "off") {
-        safeWbIndices = [parseInt(chat.settings.wbIdx)];
-    }
+    if (chat.settings.wbIndices && Array.isArray(chat.settings.wbIndices)) safeWbIndices = chat.settings.wbIndices;
+    else if (chat.settings.wbIdx !== undefined && chat.settings.wbIdx !== "off") safeWbIndices = [parseInt(chat.settings.wbIdx)];
 
-    // Load local settings or defaults
     currentChatConfig = {
         bg: chat.settings.bg || "",
         historyLimit: chat.settings.historyLimit || 20,
@@ -304,46 +248,32 @@ function enterChatRoom(chatId) {
         summaryContent: chat.settings.summaryContent || ""
     };
 
-    // UI Setup
     document.querySelectorAll('.system-page').forEach(el => el.classList.add('hidden'));
     const roomPage = document.getElementById('chat-room-page');
     roomPage.classList.remove('hidden');
     
-    // Background
-    if(currentChatConfig.bg) {
-        document.getElementById('chat-msg-container').style.backgroundImage = `url('${currentChatConfig.bg}')`;
-    } else {
-        document.getElementById('chat-msg-container').style.backgroundImage = 'none';
-    }
-
-    // Sidebar Init
+    document.getElementById('chat-msg-container').style.backgroundImage = currentChatConfig.bg ? `url('${currentChatConfig.bg}')` : 'none';
+    
     initSidebarValues();
-
-    // Render Messages
     const role = roles.find(r => r.id === chat.roleId);
     document.getElementById('chat-title-name').innerText = role ? role.name : "Chat";
     renderMessages();
 
-    // Update Sidebar Summary UI
     document.getElementById('chat-summary-toggle').value = currentChatConfig.summaryOn;
     document.getElementById('chat-summary-interval').value = currentChatConfig.summaryInterval;
     document.getElementById('chat-summary-content').value = currentChatConfig.summaryContent;
-    
-    // Reset Status Display
     document.getElementById('chat-title-status').innerText = ""; 
     const input = document.getElementById('chat-input');
-    // Reset input height
-    input.style.height = 'auto';
-    input.value = "";
+    input.style.height = 'auto'; input.value = "";
 }
 
 function exitChatRoom() {
     currentChatId = null;
+    closeFloatingMenu(); // 安全退出时清理菜单
     document.getElementById('chat-room-page').classList.add('hidden');
     enterChatList();
 }
 
-// [修改 2 & 4] 自动调整输入框高度
 function autoResizeInput(element) {
     element.style.height = 'auto';
     element.style.height = element.scrollHeight + 'px';
@@ -357,7 +287,6 @@ function renderMessages() {
     container.innerHTML = "";
 
     const role = roles.find(r => r.id === chat.roleId);
-    // Get the user profile specific to this chat session
     const chatUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
 
     chat.messages.forEach((msg,index) => {
@@ -367,34 +296,37 @@ function renderMessages() {
         const row = document.createElement('div');
         row.className = `chat-bubble-row ${isMe ? 'right' : 'left'}`;
         
-        // 长按事件绑定
-        let pressTimer;
+        const timeStr = formatTimeShort(msg.timestamp);
         
-        // 手机触摸
-        row.ontouchstart = () => { 
-            pressTimer = setTimeout(() => { 
-                openMsgMenu(index);       // 触发菜单
-                if(navigator.vibrate) navigator.vibrate(50); 
-            }, 600); 
-        };
-        row.ontouchend = () => clearTimeout(pressTimer);
-        row.ontouchmove = () => clearTimeout(pressTimer);
-        
-        // 电脑鼠标
-        row.onmousedown = () => { pressTimer = setTimeout(() => openMsgMenu(index), 600); };
-        row.onmouseup = () => clearTimeout(pressTimer);
-        row.onmouseleave = () => clearTimeout(pressTimer);
-
-        let bubbleContent = "";
-        if(msg.type === 'sticker') {
-            bubbleContent = `<img src="${msg.content}" class="chat-sticker-img">`;
-        } else {
-            bubbleContent = msg.content.replace(/\n/g, '<br>');
+        // --- 1. 处理撤回消息 ---
+        if (msg.isRecalled) {
+            let senderName = isMe ? chatUser.name : (role ? role.name : '对方');
+            row.innerHTML = `<div class="system-recall-msg">${senderName} 撤回了一条消息</div>`;
+            row.style.justifyContent = 'center';
+            container.appendChild(row);
+            return; 
         }
 
-        const timeStr = formatTimeShort(msg.timestamp);
+        // --- 2. 解析文本与伪语音 ---
+        let isVoice = false;
+        let msgContent = msg.content || "";
+        let voiceDuration = 1; // 默认 1 秒
+        
+        if (msg.type === 'text' && msgContent.startsWith('[语音]')) {
+            isVoice = true;
+            msgContent = msgContent.replace(/^\[语音\]\s*/, '').trim();
+            
+            // 按 1秒说4个字 估算，+1秒作为呼吸/停顿留白
+            voiceDuration = Math.max(1, Math.ceil(msgContent.length / 4) + 1);
+        }
 
-        // [修改 4] 统一气泡结构，不再强制背景色，只控制布局
+        let bubbleContent = "";
+        if (msg.type === 'sticker') {
+            bubbleContent = `<img src="${msg.content}" class="chat-sticker-img">`;
+        } else {
+            bubbleContent = msgContent.replace(/\n/g, '<br>');
+        }
+
         const bubbleLayout = `
             padding: 10px 14px;
             border-radius: 12px;
@@ -405,35 +337,81 @@ function renderMessages() {
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         `;
 
-        // 注意：这里移除了 background-color，它将由 CSS 的 .chat-bubble-row.right/left .chat-bubble-content 之类的选择器控制
-        // 如果你的 CSS 是基于 bubble-content 类的，下面的 div class="chat-bubble-content" 会生效
-
+        const targetClass = `target-bubble-${index}`;
         let innerHTMLContent = "";
 
-        // 使用 Flexbox 确保对齐和宽度一致
-        if (isMe) {
-            // 我: 时间 左，气泡 右
+        // --- 3. 生成气泡结构 (包含编辑态判定) ---
+        if (index === editingMsgIndex) {
             innerHTMLContent = `
                 <div style="display:flex; align-items:flex-end; gap:5px;">
-                    <div class="chat-timestamp-side">${timeStr}</div>
-                    <div class="chat-bubble-content" style="${bubbleLayout}">${bubbleContent}</div>
+                    <div class="chat-bubble-content ${targetClass}" style="${bubbleLayout}">
+                        <textarea id="inline-edit-input" class="inline-edit-input">${isVoice ? msgContent : msg.content}</textarea>
+                        <div style="text-align:right;">
+                            <button class="sys-btn" style="width:auto; padding:5px 15px; font-size:0.8rem; margin:0;" onclick="saveEditMsg(${index}, ${isVoice})">完成</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (isVoice) {
+            innerHTMLContent = `
+                <div style="display:flex; align-items:flex-end; gap:5px;">
+                    ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
+                    <div style="display:flex; flex-direction:column; align-items:${isMe ? 'flex-end' : 'flex-start'};">
+                        <div class="chat-bubble-content voice-bubble ${targetClass}" style="${bubbleLayout}" onclick="toggleVoiceText(event, ${index})">
+                            <span style="font-size:1.1rem; margin-right:5px;">🔊</span> [语音] ${voiceDuration}"
+                        </div>
+                        <div id="voice-text-${index}" class="voice-text hidden">${msgContent}</div>
+                    </div>
+                    ${!isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                 </div>
             `;
         } else {
-            // 对方: 气泡 左，时间 右
             innerHTMLContent = `
                 <div style="display:flex; align-items:flex-end; gap:5px;">
-                    <div class="chat-bubble-content" style="${bubbleLayout}">${bubbleContent}</div>
-                    <div class="chat-timestamp-side">${timeStr}</div>
+                    ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
+                    <div class="chat-bubble-content ${targetClass}" style="${bubbleLayout}">${bubbleContent}</div>
+                    ${!isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                 </div>
             `;
         }
 
         row.innerHTML = `
-            <img src="${avatarSrc}" class="chat-bubble-avatar">
+            ${!isMe ? `<img src="${avatarSrc}" class="chat-bubble-avatar">` : ''}
             ${innerHTMLContent}
+            ${isMe ? `<img src="${avatarSrc}" class="chat-bubble-avatar">` : ''}
         `;
         container.appendChild(row);
+
+        // --- 4. 绑定悬浮菜单长按事件 ---
+        setTimeout(() => {
+            const bubbleEl = row.querySelector(`.${targetClass}`);
+            if (bubbleEl) {
+                let pressTimer;
+                let isDragging = false;
+                
+                const startPress = (e) => {
+                    if (index === editingMsgIndex) return; 
+                    isDragging = false;
+                    window.globalLongPressActive = false;
+                    pressTimer = setTimeout(() => {
+                        if (!isDragging) {
+                            window.globalLongPressActive = true;
+                            openFloatingMenu(e, index, bubbleEl);
+                            if(navigator.vibrate) navigator.vibrate(50);
+                        }
+                    }, 500);
+                };
+                
+                bubbleEl.ontouchstart = startPress;
+                bubbleEl.ontouchmove = () => { isDragging = true; clearTimeout(pressTimer); };
+                bubbleEl.ontouchend = (e) => { clearTimeout(pressTimer); if(window.globalLongPressActive) e.stopPropagation(); };
+
+                bubbleEl.onmousedown = startPress;
+                bubbleEl.onmousemove = () => { isDragging = true; clearTimeout(pressTimer); };
+                bubbleEl.onmouseup = (e) => { clearTimeout(pressTimer); if(window.globalLongPressActive) e.stopPropagation(); };
+                bubbleEl.onmouseleave = () => clearTimeout(pressTimer);
+            }
+        }, 0);
     });
 
     scrollToBottom();
@@ -444,32 +422,158 @@ function scrollToBottom() {
     container.scrollTop = container.scrollHeight;
 }
 
-// --- 消息删除逻辑 ---
+// --- Floating Menu Actions (新增悬浮操作) ---
 
-function openMsgMenu(index) {
+function openFloatingMenu(e, index, bubbleEl) {
     targetMsgIndex = index;
-    document.getElementById('msg-menu-modal').classList.remove('hidden');
-}
-
-function closeMsgMenu() {
-    targetMsgIndex = -1;
-    document.getElementById('msg-menu-modal').classList.add('hidden');
-}
-
-function confirmDeleteMsg() {
-    if (targetMsgIndex === -1 || !currentChatId) return;
+    window.justOpenedMenu = true;
     
+    const menu = document.getElementById('floating-msg-menu');
+    menu.classList.remove('hidden');
+    
+    document.querySelectorAll('.chat-bubble-content').forEach(el => el.classList.remove('highlight-bubble'));
+    bubbleEl.classList.add('highlight-bubble');
+
+    const rect = bubbleEl.getBoundingClientRect();
+    const mWidth = menu.offsetWidth || 230; 
+    const mHeight = menu.offsetHeight || 60;
+
+    let top = rect.top - mHeight - 10;
+    let left = rect.left + (rect.width / 2) - (mWidth / 2);
+    
+    if (top < 50) { 
+        top = rect.bottom + 10;
+        menu.classList.add('arrow-top');
+        menu.classList.remove('arrow-bottom');
+    } else {
+        menu.classList.add('arrow-bottom');
+        menu.classList.remove('arrow-top');
+    }
+    
+    if (left < 10) left = 10;
+    if (left + mWidth > window.innerWidth - 10) left = window.innerWidth - mWidth - 10;
+    
+    menu.style.top = top + 'px';
+    menu.style.left = left + 'px';
+    
+    const arrow = menu.querySelector('.floating-menu-arrow');
+    let arrowLeft = rect.left + (rect.width / 2) - left - 8; 
+    if (arrowLeft < 15) arrowLeft = 15;
+    if (arrowLeft > mWidth - 25) arrowLeft = mWidth - 25;
+    arrow.style.left = arrowLeft + 'px';
+}
+
+function closeFloatingMenu() {
+    document.getElementById('floating-msg-menu').classList.add('hidden');
+    document.querySelectorAll('.chat-bubble-content').forEach(el => el.classList.remove('highlight-bubble'));
+    targetMsgIndex = -1;
+    setTimeout(() => { window.globalLongPressActive = false; }, 100); 
+}
+
+function copyMsg() {
+    let sel = window.getSelection();
+    let text = sel.toString().trim();
+    
+    if (!text) {
+        const chat = chats.find(c => c.id === currentChatId);
+        if (chat && chat.messages[targetMsgIndex]) {
+            text = chat.messages[targetMsgIndex].content;
+            if (text.startsWith('[语音]')) text = text.replace(/^\[语音\]\s*/, '').trim();
+        }
+    }
+    
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => showToast('已复制')).catch(() => fallbackCopy(text));
+    } else {
+        fallbackCopy(text);
+    }
+    
+    if (sel) sel.removeAllRanges();
+    closeFloatingMenu();
+}
+
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); showToast('已复制'); } catch(e) {}
+    document.body.removeChild(ta);
+}
+
+function showToast(msg) {
+    const toast = document.getElementById('toast-container');
+    toast.innerText = msg;
+    toast.classList.remove('hidden');
+    setTimeout(() => { toast.classList.add('hidden'); }, 1500);
+}
+
+function editMsg() {
+    editingMsgIndex = targetMsgIndex;
+    closeFloatingMenu();
+    renderMessages();
+}
+
+function saveEditMsg(index, isVoice) {
+    const chat = chats.find(c => c.id === currentChatId);
+    if (!chat) return;
+    const input = document.getElementById('inline-edit-input');
+    let newContent = input.value;
+    if (isVoice && !newContent.startsWith('[语音]')) newContent = "[语音] " + newContent;
+    
+    chat.messages[index].content = newContent;
+    editingMsgIndex = -1;
+    saveChatData();
+    renderMessages();
+}
+
+function recallMsg() {
+    const chat = chats.find(c => c.id === currentChatId);
+    if (!chat) return;
+    chat.messages[targetMsgIndex].isRecalled = true;
+    chat.messages[targetMsgIndex].content = ""; // 清理原文以防隐私遗留
+    saveChatData();
+    renderMessages();
+    closeFloatingMenu();
+}
+
+function deleteMsgFromMenu() {
+    if (targetMsgIndex === -1 || !currentChatId) return;
     const chat = chats.find(c => c.id === currentChatId);
     if (chat) {
         chat.messages.splice(targetMsgIndex, 1);
         saveChatData();
         renderMessages();
     }
-    closeMsgMenu();
+    closeFloatingMenu();
 }
 
-// --- Messaging Actions ---
+// --- Voice Input Modal (新增发语音窗) ---
+function openVoiceModal() {
+    document.getElementById('voice-input-text').value = "";
+    document.getElementById('voice-input-modal').classList.remove('hidden');
+}
+function closeVoiceModal() {
+    document.getElementById('voice-input-modal').classList.add('hidden');
+}
+function sendVoiceMessage() {
+    const text = document.getElementById('voice-input-text').value.trim();
+    if (!text) return;
+    appendMessage('user', '[语音] ' + text, 'text');
+    closeVoiceModal();
+}
+function toggleVoiceText(e, index) {
+    if (window.globalLongPressActive) {
+        e.stopPropagation();
+        return;
+    }
+    const txtEl = document.getElementById(`voice-text-${index}`);
+    if(txtEl) txtEl.classList.toggle('hidden');
+}
 
+
+// --- Messaging Actions ---
 function sendUserMessage() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
@@ -477,29 +581,19 @@ function sendUserMessage() {
 
     appendMessage('user', text, 'text');
     input.value = "";
-    
-    // [修改 2] 发送后重置高度为 auto
     input.style.height = 'auto';
+    setTimeout(() => { input.focus(); }, 10);
     
-    // [修改 5] 保持键盘唤起状态
-    setTimeout(() => {
-        input.focus();
-    }, 10);
-    
-    // Auto-save logic
     const chat = chats.find(c => c.id === currentChatId);
     chat.lastTime = Date.now();
     saveChatData();
 }
 
-// The core AI function
 async function triggerChatGen() {
     const btnImg = document.querySelector('.gen-btn img');
-    // 定义图标
     const ICON_IDLE = "https://files.catbox.moe/prdem6.png";
     const ICON_STOP = "https://files.catbox.moe/prdem6.png"; 
     
-    // 1. 【停止逻辑】
     if (chatAbortController) {
         chatAbortController.abort();
         chatAbortController = null;
@@ -509,7 +603,6 @@ async function triggerChatGen() {
         return;
     }
     
-    // --- 开始生成 ---
     const chat = chats.find(c => c.id === currentChatId);
     if (!chat) return;
     
@@ -530,7 +623,6 @@ async function triggerChatGen() {
     Rules:
     1. Reply naturally based on the time of day.
     2. Check the [YOUR ROLE] and [USER INFO] Persona descriptions. If today matches any birthday mentioned there, acknowledge it naturally.
-    3. If today is a culturally significant date or festival, act aware of it.
     `;
 
     const role = roles.find(r => r.id === chat.roleId);
@@ -540,71 +632,56 @@ async function triggerChatGen() {
     btnImg.src = ICON_STOP;
     document.getElementById('chat-title-status').innerText = "正在输入…";
     
-    // [修改 3] World Book Context - 多选逻辑拼接
-    // [Modification] 从 globalWorldBooks 读取，不再从 chatUser.worldBooks 读取
     let wbContext = "";
-    if (currentChatConfig.activeWorldBookIndices && 
-        currentChatConfig.activeWorldBookIndices.length > 0 && 
-        typeof globalWorldBooks !== 'undefined') { // Check global var
-        
+    if (currentChatConfig.activeWorldBookIndices && typeof globalWorldBooks !== 'undefined') { 
         const selectedWbs = currentChatConfig.activeWorldBookIndices
             .map(idx => globalWorldBooks[idx])
             .filter(wb => wb && wb.isEnabled !== false)
             .map(wb => wb.content)
             .join("\n\n");
-            
-        if (selectedWbs) {
-            wbContext = `[WORLD INFO]:\n${selectedWbs}`;
-        }
+        if (selectedWbs) wbContext = `[WORLD INFO]:\n${selectedWbs}`;
     }
     
     const recentContentForSearch = chat.messages.slice(-5).map(m => m.content).join(" ");
     const searchScope = (role.persona + " " + recentContentForSearch).toLowerCase();
 
-    // 2. 遍历通讯录，查找被提及的角色
     const detectedRoles = roles.filter(r => {
-        // 排除自己、排除被禁用的
         if (r.id === role.id || r.isEnabled === false) return false;
-        
-        // 核心判断：如果名字出现在搜索范围内
-        if (searchScope.includes(r.name.toLowerCase())) {
-            return true;
-        }
-        return false;
+        return searchScope.includes(r.name.toLowerCase());
     });
 
-    // 3. 生成文本 (如果没有匹配到人，这里就是空的，完全不费Token)
-    const gossipText = detectedRoles.map(r => {
-        // 这里我放开了字数限制，因为是精准匹配的，通常值得读取完整设定
-        // 如果你觉得太费 Token，可以把 r.persona 改成 r.persona.substring(0, 100)
-        return `[RELEVANT CHARACTER]:\nName: ${r.name} (${r.id})\nPersona: ${r.persona}`;
-    }).join("\n\n");
+    const gossipText = detectedRoles.map(r => `[RELEVANT CHARACTER]:\nName: ${r.name} (${r.id})\nPersona: ${r.persona}`).join("\n\n");
     
     const historyLimit = parseInt(currentChatConfig.historyLimit) || 20;
     const recentMsgs = chat.messages.slice(-historyLimit);
     const historyText = recentMsgs.map(m => {
         let name = m.sender === 'user' ? chatUser.name : role.name;
-        let content = m.type === 'sticker' ? `[Sent a sticker: ${m.desc || 'image'}]` : m.content;
+        let content = "";
+        
+        // 如果消息被撤回了，告诉 AI 这是一个撤回动作
+        if (m.isRecalled) {
+            content = "[撤回了一条消息]";
+        } else if (m.type === 'sticker') {
+            content = `[发了一个表情包: ${m.desc || '图片'}]`;
+        } else {
+            content = m.content;
+        }
+        
         return `${name}: ${content}`;
     }).join("\n");
     
     let summaryPrompt = "";
-    if (currentChatConfig.summaryContent) {
-        summaryPrompt = `[LONG TERM MEMORY / SUMMARY]:\n${currentChatConfig.summaryContent}\n`;
-    }
+    if (currentChatConfig.summaryContent) summaryPrompt = `[LONG TERM MEMORY / SUMMARY]:\n${currentChatConfig.summaryContent}\n`;
     
     const fullSystemPrompt = `
     ${DM_VIBE_PROMPT}
     ${TIME_CONTEXT}
-    ${HELIOS_WORLD_CONFIG}
     [YOUR ROLE]
     Name: ${role.name}
-    ID: ${role.id}
     Persona: ${role.persona}
 
     [USER INFO]
     Name: ${chatUser.name}
-    ID: ${chatUser.id}
     Persona: ${chatUser.persona}
 
     ${wbContext}
@@ -628,18 +705,14 @@ async function triggerChatGen() {
     
     if (aiResponse) {
         let rawContent = aiResponse;
-        
-        // Parse Status
         const statusMatch = rawContent.match(/@@STATUS@@(.*?)@@STATUS@@/);
         if (statusMatch) {
-            const newStatus = statusMatch[1].trim();
-            document.getElementById('chat-title-status').innerText = newStatus;
+            document.getElementById('chat-title-status').innerText = statusMatch[1].trim();
             rawContent = rawContent.replace(statusMatch[0], "").trim();
         } else {
             document.getElementById('chat-title-status').innerText = "";
         }
         
-        // Check SNS
         let snsDraft = null;
         if (rawContent.includes("@@SNS@@")) {
             const parts = rawContent.split("@@SNS@@");
@@ -647,21 +720,24 @@ async function triggerChatGen() {
             if (parts[1]) snsDraft = parts[1].trim();
         }
         
-        // Parse Split Messages
         const msgParts = rawContent.split("@@SPLIT@@");
         
         for (let i = 0; i < msgParts.length; i++) {
             const part = msgParts[i].trim();
             if (part) {
                 if (i > 0) await new Promise(r => setTimeout(r, 600));
-                appendMessage('role', part, 'text');
+                
+                if (part === '[撤回]') {
+                     chat.messages.push({ sender: 'role', content: "", type: 'text', isRecalled: true, timestamp: Date.now() });
+                     chat.lastTime = Date.now();
+                     saveChatData(); renderMessages();
+                } else {
+                     appendMessage('role', part, 'text');
+                }
             }
         }
         
-        if (snsDraft) {
-            handleChatToSNS(role, snsDraft);
-        }
-        
+        if (snsDraft) handleChatToSNS(role, snsDraft);
         checkAutoSummary(chat, chatUser, role);
     }
 }
@@ -669,261 +745,128 @@ async function triggerChatGen() {
 function appendMessage(sender, content, type, desc = "") {
     const chat = chats.find(c => c.id === currentChatId);
     if(!chat) return;
-
-    chat.messages.push({
-        sender: sender,
-        content: content,
-        type: type,
-        desc: desc, // for stickers
-        timestamp: Date.now()
-    });
+    chat.messages.push({ sender: sender, content: content, type: type, desc: desc, timestamp: Date.now() });
     chat.lastTime = Date.now();
-    saveChatData();
-    renderMessages();
+    saveChatData(); renderMessages();
 }
 
 function handleChatToSNS(authorRole, content) {
-    // Add to global posts
-    const newPost = {
-        uid: Date.now() + Math.random().toString(),
-        author: authorRole,
-        time: getTimestamp(),
-        content: content,
-        image: null, 
-        imageDesc: "From Chat Inspiration",
-        isFav: false,
-        comments: []
-    };
-    
+    const newPost = { uid: Date.now()+Math.random().toString(), author: authorRole, time: getTimestamp(), content: content, image: null, isFav: false, comments: [] };
     if(typeof posts !== 'undefined') {
-        posts.unshift(newPost);
-        saveAllData(); 
+        posts.unshift(newPost); saveAllData(); 
         alert(`✨ ${authorRole.name} 刚才把聊天灵感发到朋友圈了！`);
     }
 }
 
 // --- Auto Summary Logic ---
-
 async function checkAutoSummary(chat, chatUser, role) {
     if(currentChatConfig.summaryOn !== "on") return;
-    
-    const rounds = Math.floor(chat.messages.length / 2);
     const interval = parseInt(currentChatConfig.summaryInterval) || 10;
-    
     if(!chat.lastSummaryMsgCount) chat.lastSummaryMsgCount = 0;
-    
     const newMsgsSinceLast = chat.messages.length - chat.lastSummaryMsgCount;
-    // Assume 1 round = 2 msgs. Wait until adequate messages passed
-    if(newMsgsSinceLast >= interval * 2) {
-        performAutoSummary(chat, chatUser, role);
-    }
+    if(newMsgsSinceLast >= interval * 2) performAutoSummary(chat, chatUser, role);
 }
 
 async function performAutoSummary(chat, chatUser, role) {
     document.getElementById('chat-title-status').innerText = "正在整理记忆…";
-    
     const lookback = parseInt(currentChatConfig.summaryInterval) * 4;
-    const recentMsgs = chat.messages.slice(-lookback); 
-    const textToSummarize = recentMsgs.map(m => `${m.sender}: ${m.content}`).join("\n");
-    
-    const prompt = `
-    Summarize the chat history below into a concise memory (max 100 words).
-    Current Memory: ${currentChatConfig.summaryContent}
-    New Chat Logs:
-    ${textToSummarize}
-    
-    Task: Update the memory. Keep important facts, relationship changes. Discard trivial talk.
-    Output only the new summary text.
-    `;
-    
+    const textToSummarize = chat.messages.slice(-lookback).map(m => `${m.sender}: ${m.content}`).join("\n");
     const summary = await callAI([
         { role: "system", content: "You are a memory manager." },
-        { role: "user", content: prompt }
+        { role: "user", content: `Summarize chat history (max 100 words).\nCurrent Memory: ${currentChatConfig.summaryContent}\nNew Logs:\n${textToSummarize}\nOutput only the new summary text.` }
     ]);
-    
     if(summary) {
-        currentChatConfig.summaryContent = summary;
-        chat.settings.summaryContent = summary;
-        chat.lastSummaryMsgCount = chat.messages.length;
-        
-        document.getElementById('chat-summary-content').value = summary;
-        saveChatData();
-        
+        currentChatConfig.summaryContent = summary; chat.settings.summaryContent = summary; chat.lastSummaryMsgCount = chat.messages.length;
+        document.getElementById('chat-summary-content').value = summary; saveChatData();
         document.getElementById('chat-title-status').innerText = "记忆已更新";
-        setTimeout(() => {
-             if(document.getElementById('chat-title-status').innerText === "记忆已更新") {
-                 document.getElementById('chat-title-status').innerText = "";
-             }
-        }, 2000);
+        setTimeout(() => { if(document.getElementById('chat-title-status').innerText==="记忆已更新") document.getElementById('chat-title-status').innerText=""; }, 2000);
     }
 }
-
-function saveChatSummaryManually() {
-    const val = document.getElementById('chat-summary-content').value;
-    updateChatSetting('summaryContent', val);
-    alert("记忆已手动保存");
-}
+function saveChatSummaryManually() { updateChatSetting('summaryContent', document.getElementById('chat-summary-content').value); alert("记忆已手动保存"); }
 
 // --- Sidebar & Settings ---
-
 function toggleChatSidebar() {
     const sidebar = document.getElementById('chat-sidebar');
     const overlay = document.getElementById('chat-sidebar-overlay');
-    
-    // 侧边栏关闭时，如果下拉菜单还开着，也顺便关掉
     const wbDropdown = document.getElementById('wb-dropdown-list');
-    if(wbDropdown && !wbDropdown.classList.contains('hidden')) {
-        wbDropdown.classList.add('hidden');
-    }
-    
-    if(sidebar.classList.contains('open')) {
-        sidebar.classList.remove('open');
-        overlay.classList.add('hidden');
-    } else {
-        sidebar.classList.add('open');
-        overlay.classList.remove('hidden');
-    }
+    if(wbDropdown && !wbDropdown.classList.contains('hidden')) wbDropdown.classList.add('hidden');
+    if(sidebar.classList.contains('open')) { sidebar.classList.remove('open'); overlay.classList.add('hidden'); } 
+    else { sidebar.classList.add('open'); overlay.classList.remove('hidden'); }
 }
 
-// [修改] 世界书下拉菜单切换逻辑
-function toggleWbDropdown() {
-    const dropdown = document.getElementById('wb-dropdown-list');
-    dropdown.classList.toggle('hidden');
-}
-
-// 全局点击监听，处理点击外部关闭世界书下拉框
+function toggleWbDropdown() { document.getElementById('wb-dropdown-list').classList.toggle('hidden'); }
 document.addEventListener('click', function(event) {
     const dropdown = document.getElementById('wb-dropdown-list');
     const trigger = document.querySelector('.select-box'); 
-    // 如果点击的不是下拉框本身，也不是触发按钮，且下拉框是打开的
     if (dropdown && !dropdown.classList.contains('hidden')) {
-        if (!dropdown.contains(event.target) && !trigger.contains(event.target)) {
-            dropdown.classList.add('hidden');
-        }
+        if (!dropdown.contains(event.target) && !trigger.contains(event.target)) dropdown.classList.add('hidden');
     }
 });
 
 function initSidebarValues() {
-    // 1. User Profile Select
     const userSelect = document.getElementById('chat-user-select');
     userSelect.innerHTML = "";
     userProfiles.forEach((p, idx) => {
         const opt = document.createElement('option');
-        opt.value = idx;
-        opt.innerText = p.profileName;
+        opt.value = idx; opt.innerText = p.profileName;
         if(idx == currentChatConfig.activeProfileIdx) opt.selected = true;
         userSelect.appendChild(opt);
     });
     userSelect.onchange = (e) => updateChatSetting('activeProfileIdx', e.target.value);
 
-    // 2. [Modification] World Book Dropdown List (Global Source)
     const wbDropdownContainer = document.getElementById('wb-dropdown-list');
-    wbDropdownContainer.innerHTML = ""; // Clear existing
-    
-    // Removed dependency on 'targetUser', using globalWorldBooks directly
+    wbDropdownContainer.innerHTML = ""; 
     let selectedCount = 0;
-
     if(typeof globalWorldBooks !== 'undefined') {
         globalWorldBooks.forEach((wb, idx) => {
             if(wb.isEnabled !== false) {
                 const isChecked = currentChatConfig.activeWorldBookIndices.includes(idx);
                 if(isChecked) selectedCount++;
-                
                 const div = document.createElement('div');
-                div.style.padding = '8px 10px';
-                div.style.borderBottom = '1px solid #f0f0f0';
-                div.style.display = 'flex';
-                div.style.alignItems = 'center';
-                
+                div.style = 'padding:8px 10px; border-bottom:1px solid #f0f0f0; display:flex; align-items:center;';
                 const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.checked = isChecked;
-                checkbox.style.marginRight = '10px';
-                checkbox.style.transform = 'scale(1.2)';
+                checkbox.type = 'checkbox'; checkbox.checked = isChecked; checkbox.style = 'margin-right:10px; transform:scale(1.2);';
                 checkbox.onchange = (e) => toggleWorldBookSelection(idx, e.target.checked);
-                
                 const label = document.createElement('span');
-                label.innerText = `条目 #${idx+1}: ${wb.content.substring(0,15)}${wb.content.length>15?'...':''}`;
-                label.style.fontSize = '0.9rem';
-                label.style.flex = '1';
-                // 点击文字也能切换
-                label.onclick = () => { checkbox.click(); };
-                
-                div.appendChild(checkbox);
-                div.appendChild(label);
-                wbDropdownContainer.appendChild(div);
+                label.innerText = `条目 #${idx+1}: ${wb.content.substring(0,15)}...`;
+                label.style = 'font-size:0.9rem; flex:1; cursor:pointer;';
+                label.onclick = () => checkbox.click();
+                div.appendChild(checkbox); div.appendChild(label); wbDropdownContainer.appendChild(div);
             }
         });
-        if(globalWorldBooks.length === 0) {
-            wbDropdownContainer.innerHTML = "<div style='padding:10px; color:#999;font-size:0.8rem; text-align:center;'>暂无世界书条目</div>";
-        }
     }
-    
-    // 更新触发按钮上的文字
     updateWbTriggerText(selectedCount);
 
-    // 3. Inputs
     document.getElementById('chat-bg-input').value = currentChatConfig.bg;
     document.getElementById('chat-history-limit').value = currentChatConfig.historyLimit;
     document.getElementById('chat-history-limit').onchange = (e) => updateChatSetting('historyLimit', e.target.value);
-
-    // 4. Summary Listeners
-    const sumToggle = document.getElementById('chat-summary-toggle');
-    const sumInterval = document.getElementById('chat-summary-interval');
-    
-    sumToggle.onchange = (e) => updateChatSetting('summaryOn', e.target.value);
-    sumInterval.onchange = (e) => updateChatSetting('summaryInterval', e.target.value);
+    document.getElementById('chat-summary-toggle').onchange = (e) => updateChatSetting('summaryOn', e.target.value);
+    document.getElementById('chat-summary-interval').onchange = (e) => updateChatSetting('summaryInterval', e.target.value);
 }
 
 function updateWbTriggerText(count) {
     const textSpan = document.getElementById('wb-selected-text');
-    if(count === 0) textSpan.innerText = "未选择世界书";
-    else textSpan.innerText = `已启用 ${count} 个条目`;
+    textSpan.innerText = count === 0 ? "未选择世界书" : `已启用 ${count} 个条目`;
 }
 
-// [修改] 处理世界书多选切换
 function toggleWorldBookSelection(idx, isChecked) {
     let indices = currentChatConfig.activeWorldBookIndices;
-    if (isChecked) {
-        if (!indices.includes(idx)) indices.push(idx);
-    } else {
-        indices = indices.filter(i => i !== idx);
-    }
-    // Update config
+    if (isChecked) { if (!indices.includes(idx)) indices.push(idx); } 
+    else { indices = indices.filter(i => i !== idx); }
     updateChatSetting('activeWorldBookIndices', indices);
-    
-    // Update UI text immediately
     updateWbTriggerText(indices.length);
 }
 
 function updateChatSetting(key, value) {
     const chat = chats.find(c => c.id === currentChatId);
     if(!chat) return;
-
     if(key === 'activeProfileIdx' || key === 'historyLimit' || key === 'summaryInterval') value = parseInt(value);
-    
     currentChatConfig[key] = value;
-    
-    // Map simplified keys to settings object
-    if(key === 'activeWorldBookIndices') {
-        chat.settings.wbIndices = value; // Save array
-        chat.settings.wbIdx = "off"; // Legacy clear
-    }
+    if(key === 'activeWorldBookIndices') { chat.settings.wbIndices = value; chat.settings.wbIdx = "off"; }
     else if(key === 'activeProfileIdx') chat.settings.profileIdx = value;
     else chat.settings[key] = value;
-    
     saveChatData();
-
-    // If profile changed, need to refresh worldbook list and messages
-    if(key === 'activeProfileIdx') {
-        // [修改 1] 移除世界书重置逻辑
-        // 因为世界书现在是全局的(globalWorldBooks)且独立的，
-        // 切换 "用户(Speaker)" 不应该导致 "世界观设置" 丢失。
-        // 所以这里删除了 clearing wbIndices 的代码。
-        
-        initSidebarValues(); // refresh wb list (to stay safe)
-        renderMessages(); // refresh avatars
-    }
+    if(key === 'activeProfileIdx') { initSidebarValues(); renderMessages(); }
 }
 
 function saveChatBg() {
@@ -935,101 +878,54 @@ function saveChatBg() {
 function clearChatHistory() {
     if(!confirm("确定清空当前对话记录？无法恢复。")) return;
     const chat = chats.find(c => c.id === currentChatId);
-    chat.messages = [];
-    chat.lastSummaryMsgCount = 0; // Reset summary counter
-    saveChatData();
-    renderMessages();
-    toggleChatSidebar();
+    chat.messages = []; chat.lastSummaryMsgCount = 0; saveChatData(); renderMessages(); toggleChatSidebar();
 }
 
 // --- Sticker System ---
-
 function toggleStickerPanel(event) {
     if(event) event.stopPropagation();
-
     const panel = document.getElementById('sticker-panel');
-    
-    if(panel.classList.contains('hidden')) {
-        panel.classList.remove('hidden');
-        renderStickerGrid();
-    } else {
-        panel.classList.add('hidden');
-    }
+    if(panel.classList.contains('hidden')) { panel.classList.remove('hidden'); renderStickerGrid(); } 
+    else { panel.classList.add('hidden'); }
 }
 
-// [修改 1] 表情包渲染逻辑，增加长按事件
 function renderStickerGrid() {
     const grid = document.getElementById('sticker-grid');
     grid.innerHTML = "";
     stickers.forEach((s, index) => {
         const img = document.createElement('img');
-        img.className = "sticker-option";
-        img.src = s.src;
-        
-        // 点击发送
+        img.className = "sticker-option"; img.src = s.src;
         img.onclick = () => sendSticker(s);
-        
-        // 长按删除 (Touch)
         let pressTimer;
-        img.ontouchstart = (e) => { 
-            pressTimer = setTimeout(() => { 
-                openStickerMenu(index);
-                if(navigator.vibrate) navigator.vibrate(50);
-            }, 600); 
-        };
+        img.ontouchstart = () => { pressTimer = setTimeout(() => { openStickerMenu(index); if(navigator.vibrate) navigator.vibrate(50); }, 600); };
         img.ontouchend = () => clearTimeout(pressTimer);
-        
-        // 长按删除 (Mouse)
         img.onmousedown = () => { pressTimer = setTimeout(() => openStickerMenu(index), 600); };
         img.onmouseup = () => clearTimeout(pressTimer);
-        
         grid.appendChild(img);
     });
 }
 
-// [修改 1] 表情包删除菜单逻辑
-function openStickerMenu(index) {
-    targetStickerIndex = index;
-    document.getElementById('sticker-menu-modal').classList.remove('hidden');
-}
-
-function closeStickerMenu() {
-    targetStickerIndex = -1;
-    document.getElementById('sticker-menu-modal').classList.add('hidden');
-}
-
-function confirmDeleteSticker() {
-    if (targetStickerIndex === -1) return;
-    stickers.splice(targetStickerIndex, 1);
-    saveChatData();
-    renderStickerGrid();
-    closeStickerMenu();
-}
+function openStickerMenu(index) { targetStickerIndex = index; document.getElementById('sticker-menu-modal').classList.remove('hidden'); }
+function closeStickerMenu() { targetStickerIndex = -1; document.getElementById('sticker-menu-modal').classList.add('hidden'); }
+function confirmDeleteSticker() { if (targetStickerIndex === -1) return; stickers.splice(targetStickerIndex, 1); saveChatData(); renderStickerGrid(); closeStickerMenu(); }
 
 function handleStickerUpload(input) {
-    const file = input.files[0];
-    if(!file) return;
-    
+    const file = input.files[0]; if(!file) return;
     const reader = new FileReader();
     reader.onload = function(e) {
-        tempStickerFile = e.target.result; // Base64
+        tempStickerFile = e.target.result;
         document.getElementById('sticker-preview-img').src = tempStickerFile;
         document.getElementById('sticker-desc-input').value = "";
         document.getElementById('sticker-desc-modal').classList.remove('hidden');
     };
-    reader.readAsDataURL(file);
-    input.value = "";
+    reader.readAsDataURL(file); input.value = "";
 }
 
 function confirmStickerUpload() {
     const desc = document.getElementById('sticker-desc-input').value || "表情包";
     if(!tempStickerFile) return;
-
-    stickers.push({ src: tempStickerFile, desc: desc });
-    saveChatData();
-    
-    document.getElementById('sticker-desc-modal').classList.add('hidden');
-    renderStickerGrid(); // Refresh panel
+    stickers.push({ src: tempStickerFile, desc: desc }); saveChatData();
+    document.getElementById('sticker-desc-modal').classList.add('hidden'); renderStickerGrid();
 }
 
 function sendSticker(stickerObj) {
@@ -1037,21 +933,16 @@ function sendSticker(stickerObj) {
     document.getElementById('sticker-panel').classList.add('hidden');
 }
 
-// --- Utils ---
 function formatTimeShort(ts) {
     if(!ts) return "";
     const date = new Date(ts);
     return `${date.getHours()}:${date.getMinutes().toString().padStart(2,'0')}`;
 }
 
-// 全局监听：点击空白处关闭表情包面板
 document.addEventListener('click', (e) => {
     const panel = document.getElementById('sticker-panel');
     const btn = document.getElementById('sticker-toggle-btn');
-    
     if (!panel.classList.contains('hidden')) {
-        if (!panel.contains(e.target) && e.target !== btn) {
-            panel.classList.add('hidden');
-        }
+        if (!panel.contains(e.target) && e.target !== btn) panel.classList.add('hidden');
     }
 });

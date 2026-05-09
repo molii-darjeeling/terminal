@@ -21,9 +21,8 @@
     <!-- 引用外部样式表 -->
     <link rel="stylesheet" href="style.css">
 
-    <!-- [修改] 针对本次修改要求的样式覆盖 -->
+    <!-- 针对本次修改要求的样式覆盖 -->
     <style>
-        /* Req 2: 私聊输入框去除灰色滚动条样式，但保留滑动功能 */
         .chat-textarea {
             scrollbar-width: none; /* Firefox */
             -ms-overflow-style: none; /* IE/Edge */
@@ -32,23 +31,17 @@
             display: none; /* Chrome/Safari/Webkit */
         }
 
-        /* Req 3: 顶部导航栏固定 */
         .sys-top-bar {
             position: -webkit-sticky; /* Safari */
             position: sticky;
             top: 0;
-            z-index: 1000; /* 确保在最上层 */
-            /* 删除了 background-color: inherit; */
+            z-index: 1000; 
         }
-        
-        
     </style>
 </head>
 <body>
 
-    <!-- ==============================================
-         外部系统：主菜单 (LEVEL 1)
-         ============================================== -->
+    <!-- 主菜单 -->
     <div id="main-menu-page" class="system-page">
         <div class="sys-top-bar">终端 TERMINAL</div>
         <div class="sys-content-scroll">
@@ -105,26 +98,22 @@
         </div>
     </div>
 
-    <!-- User Edit Modal with Multi-Profile -->
+    <!-- 用户资料编辑弹窗 -->
     <div id="user-edit-modal" class="sys-modal hidden">
         <div class="sys-modal-box">
             <div class="sys-modal-header">
                 <span>个人资料 & 档案管理</span>
                 <span onclick="closeUserEditModal()" style="cursor:pointer;">×</span>
             </div>
-            
-            <!-- 多档案管理栏 -->
             <div class="profile-manager-bar">
                 <select id="profile-select" class="profile-select" onchange="switchProfile(this.value)"></select>
                 <button class="profile-btn" onclick="createNewProfile()">+ 新建</button>
                 <button class="profile-btn" style="color:red;" onclick="deleteCurrentProfile()">删除</button>
             </div>
-
             <div class="sys-form-group">
                 <label>档案名称 (用于区分)</label>
                 <input type="text" id="edit-profile-name" class="sys-input" placeholder="例如：默认马甲">
             </div>
-
             <div style="border-top:1px solid #eee; margin:10px 0; padding-top:10px;">
                 <div class="sys-form-group">
                     <label>昵称</label>
@@ -147,11 +136,7 @@
         </div>
     </div>
 
-    <!-- ==============================================
-         外部系统：二级菜单 (LEVEL 2)
-         ============================================== -->
-
-    <!-- SUB PAGE: CONTACTS -->
+    <!-- CONTACTS -->
     <div id="contacts-page" class="system-page hidden">
         <div class="sys-top-bar">终端 TERMINAL</div>
         <div class="sub-nav-bar">
@@ -164,7 +149,7 @@
         <div class="add-btn-float" onclick="addNewRole()">+</div>
     </div>
 
-    <!-- SUB PAGE: WORLD BOOK -->
+    <!-- WORLD BOOK -->
     <div id="world-page" class="system-page hidden">
         <div class="sys-top-bar">终端 TERMINAL</div>
         <div class="sub-nav-bar">
@@ -182,7 +167,7 @@
         </div>
     </div>
 
-    <!-- SUB PAGE: API -->
+    <!-- API -->
     <div id="api-page" class="system-page hidden">
         <div class="sys-top-bar">终端 TERMINAL</div>
         <div class="sub-nav-bar">
@@ -213,11 +198,7 @@
         </div>
     </div>
 
-    <!-- ==============================================
-         SNS 系统
-         ============================================== -->
-    
-    <!-- FEED PAGE -->
+    <!-- SNS: FEED -->
     <div id="feed-page" class="sns-page hidden">
         <div class="top-nav">
             <div class="nav-left">
@@ -235,7 +216,7 @@
         <div class="refresh-fab" onclick="generateMultiPosts()">↻</div>
     </div>
 
-    <!-- DETAIL PAGE -->
+    <!-- SNS: DETAIL -->
     <div id="detail-page" class="sns-page hidden">
         <div class="top-nav-p2">
             <div class="nav-left-p2">
@@ -274,7 +255,7 @@
         </div>
     </div>
 
-    <!-- BOTTOM NAV (SNS Only) -->
+    <!-- SNS: BOTTOM NAV -->
     <div class="bottom-nav hidden" id="bottom-bar">
         <div class="skew-btn btn-post-nav" id="btn-post-trigger" onclick="openUserPostModal()">
             <span>✏️ POST</span>
@@ -286,10 +267,10 @@
     </div>
 
     <!-- ==============================================
-         CHAT 系统 (修订版)
+         CHAT 系统
          ============================================== -->
 
-    <!-- 1. 消息列表页 (CHAT LIST) -->
+    <!-- CHAT LIST -->
     <div id="chat-list-page" class="system-page hidden">
         <div class="sys-top-bar" style="justify-content: space-between; padding: 0 15px;">
             <div class="back-arrow" onclick="backToMenu()">◀</div>
@@ -298,15 +279,13 @@
         </div>
         <div class="sys-content-scroll">
             <div id="chat-list-container" class="sub-page-container" style="padding:0;">
-                <!-- JS 将在这里生成聊天列表项 -->
                 <div class="empty-tip">暂无会话，点击右上角 + 创建</div>
             </div>
         </div>
     </div>
 
-    <!-- 2. 聊天窗口页 (CHAT ROOM) -->
+    <!-- CHAT ROOM -->
     <div id="chat-room-page" class="system-page hidden" style="background: #e6ebf0;">
-        <!-- 顶部导航 -->
         <div class="sys-top-bar" style="justify-content: space-between; padding: 0 10px;">
             <div style="display:flex; align-items:center; gap:10px;">
                 <div class="back-arrow" onclick="exitChatRoom()">◀</div>
@@ -318,76 +297,61 @@
             <div style="font-size:1.2rem; cursor:pointer;" onclick="toggleChatSidebar()">☰</div>
         </div>
 
-        <!-- 聊天记录滚动区 -->
-        <div class="chat-msg-container" id="chat-msg-container">
-            <!-- JS 填充消息气泡 -->
-        </div>
+        <div class="chat-msg-container" id="chat-msg-container"></div>
 
-        <!-- 底部输入区域容器 -->
+        <!-- 底部输入区域 -->
         <div class="chat-footer-area">
             
-            <!-- 表情包面板 (默认隐藏) -->
             <div id="sticker-panel" class="sticker-panel hidden">
                 <div class="sticker-header">
                     <span>已存表情 (长按删除)</span>
                     <button class="sys-btn-outline" style="width:auto; padding:2px 8px; font-size:0.75rem;" onclick="document.getElementById('sticker-upload').click()">+ 上传</button>
                     <input type="file" id="sticker-upload" class="hidden" accept="image/*" onchange="handleStickerUpload(this)">
                 </div>
-                <div class="sticker-grid" id="sticker-grid">
-                    <!-- JS 填充表情 -->
-                </div>
+                <div class="sticker-grid" id="sticker-grid"></div>
             </div>
 
-            <!-- 工具栏 (输入框上方) -->
-            <div class="chat-toolbar">
-                <img src="https://files.catbox.moe/1poupw.png" class="tool-icon" id="sticker-toggle-btn" onclick="toggleStickerPanel(event)">
+            <!-- 工具栏 -->
+            <div class="chat-toolbar" style="display: flex; flex-direction: row; align-items: center; gap: 15px; padding: 5px 10px;">
+                <!-- 表情包 (左) -->
+                <img src="https://files.catbox.moe/plz9z8.png" class="tool-icon" id="sticker-toggle-btn" onclick="toggleStickerPanel(event)" style="margin: 0; width: 28px; height: 28px;">
+                
+                <!-- 发语音 (右) -->
+                <img src="https://files.catbox.moe/gn4kcm.png" class="tool-icon" onclick="openVoiceModal()" style="margin: 0; width: 28px; height: 28px; cursor: pointer; object-fit: contain;">
             </div>
 
             <!-- 输入行 -->
             <div class="chat-input-row">
-                <!-- 生成键 (左) -->
                 <div class="chat-action-btn gen-btn" onclick="triggerChatGen()">
                     <img src="https://files.catbox.moe/prdem6.png">
                 </div>
-                
-                <!-- 自适应高度输入框 -->
                 <textarea id="chat-input" class="chat-textarea" rows="1" placeholder="发送消息..." oninput="autoResizeInput(this)"></textarea>
-                
-                <!-- 发送键 (右) -->
                 <div class="chat-action-btn send-btn" onclick="sendUserMessage()">
                     <img src="https://files.catbox.moe/4s5ch3.png">
                 </div>
             </div>
         </div>
 
-        <!-- 侧边菜单栏 (遮罩 + 面板) -->
+        <!-- 侧边菜单栏 -->
         <div id="chat-sidebar-overlay" class="chat-sidebar-overlay hidden" onclick="toggleChatSidebar()"></div>
         <div id="chat-sidebar" class="chat-sidebar">
             <div class="sidebar-header">聊天设置</div>
             <div class="sidebar-content">
-                
                 <div class="sidebar-item">
                     <label>🎭 当前身份 (User)</label>
                     <select id="chat-user-select" class="sys-select"></select>
                 </div>
-
-                <!-- 修改：世界书 (折叠多选) -->
                 <div class="sidebar-item">
                     <label>🌍 世界书 (可多选)</label>
                     <div class="custom-multiselect" style="position:relative;">
-                        <!-- 触发按钮 -->
                         <div class="select-box" onclick="toggleWbDropdown()" style="border:1px solid #ddd; padding:8px; border-radius:6px; background:#fff; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
                             <span id="wb-selected-text" style="font-size:0.9rem; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">选择世界书...</span>
                             <span style="font-size:0.8rem; color:#888;">▼</span>
                         </div>
-                        <!-- 下拉列表 (默认隐藏) -->
                         <div id="wb-dropdown-list" class="hidden" style="position:absolute; top:100%; left:0; width:100%; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #ddd; border-top:none; border-radius:0 0 6px 6px; z-index:100; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
-                            <!-- JS 填充 -->
                         </div>
                     </div>
                 </div>
-
-                <!-- 长期记忆/总结设置 -->
                 <div class="sidebar-item" style="border-top:1px dashed #ddd; padding-top:10px; margin-top:10px;">
                     <label>🧠 长期记忆 (AI 自动总结)</label>
                     <div style="display:flex; gap:10px;">
@@ -400,28 +364,59 @@
                     <textarea id="chat-summary-content" class="sys-textarea" rows="4" placeholder="这里是AI生成的长期记忆摘要..." style="margin-top:5px; font-size:0.8rem; color:#666;"></textarea>
                     <button class="sys-btn" style="margin-top:5px; padding:5px; font-size:0.8rem;" onclick="saveChatSummaryManually()">手动保存记忆文本</button>
                 </div>
-
                 <div class="sidebar-item" style="border-top:1px dashed #ddd; padding-top:10px;">
                     <label>🖼️ 聊天背景</label>
                     <input type="text" id="chat-bg-input" class="sys-input" placeholder="图片URL">
                     <button class="sys-btn" style="margin-top:5px; padding:5px;" onclick="saveChatBg()">应用</button>
                 </div>
-
                 <div class="sidebar-item">
                     <label>📜 历史记录加载数</label>
                     <input type="number" id="chat-history-limit" class="sys-input" value="20">
                 </div>
-
                 <div class="sidebar-item" style="margin-top:auto; padding-top:20px; border-top:1px solid #eee;">
                     <button class="sys-btn sys-btn-danger" onclick="clearChatHistory()">🗑️ 清空聊天记录</button>
                 </div>
-
             </div>
         </div>
     </div>
     
-    <!-- SNS MODALS -->
-    
+    <!-- 悬浮长按操作菜单 (新增) -->
+    <div id="floating-msg-menu" class="floating-menu hidden">
+        <div class="floating-menu-arrow"></div>
+        <div class="floating-menu-item" onclick="copyMsg()" onmousedown="event.preventDefault()" ontouchstart="event.preventDefault()">
+            <span>📄</span>
+            <span>复制</span>
+        </div>
+        <div class="floating-menu-item" onclick="editMsg()">
+            <span>✏️</span>
+            <span>编辑</span>
+        </div>
+        <div class="floating-menu-item" onclick="recallMsg()">
+            <span>↩️</span>
+            <span>撤回</span>
+        </div>
+        <div class="floating-menu-item danger" onclick="deleteMsgFromMenu()">
+            <span>🗑️</span>
+            <span>删除</span>
+        </div>
+    </div>
+
+    <!-- 发语音弹窗 (新增) -->
+    <div id="voice-input-modal" class="modal-overlay hidden" onclick="closeVoiceModal()">
+        <div class="reply-box" onclick="event.stopPropagation()">
+            <h3>🎤 发送语音</h3>
+            <textarea id="voice-input-text" class="reply-textarea" placeholder="输入要发送的语音内容..."></textarea>
+            <div class="reply-actions">
+                <button class="btn-cancel" onclick="closeVoiceModal()">取消</button>
+                <button class="btn-send" onclick="sendVoiceMessage()">发送语音</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 轻量提示框 (Toast) (新增) -->
+    <div id="toast-container" class="toast hidden">已复制</div>
+
+    <!-- 其余基础弹窗与SNS弹窗保持不变 -->
     <div id="chat-list-menu-modal" class="modal-overlay hidden" onclick="closeChatListMenu()">
         <div class="reply-box" onclick="event.stopPropagation()">
             <h3>会话操作</h3>
@@ -431,16 +426,6 @@
         </div>
     </div>
 
-    <!-- 消息长按菜单 (删除消息用) -->
-    <div id="msg-menu-modal" class="modal-overlay hidden" onclick="closeMsgMenu()">
-        <div class="reply-box" onclick="event.stopPropagation()">
-            <h3>消息操作</h3>
-            <div class="action-menu-item danger" onclick="confirmDeleteMsg()">🗑️ 删除此消息</div>
-            <div class="action-menu-item" onclick="closeMsgMenu()">取消</div>
-        </div>
-    </div>
-
-    <!-- 表情包长按菜单 (删除表情包用) -->
     <div id="sticker-menu-modal" class="modal-overlay hidden" onclick="closeStickerMenu()">
         <div class="reply-box" onclick="event.stopPropagation()">
             <h3>表情包操作</h3>
@@ -508,14 +493,11 @@
         <div>生成中，请稍后…</div>
     </div>
 
-    <!-- 顺序加载 JS 文件 -->
     <script src="data.js"></script>
     <script src="sns.js"></script>
     <script src="chat.js"></script>
     
-     <!-- CHAT MODALS -->
-    
-    <!-- 新建聊天选择角色 -->
+    <!-- CHAT 基础弹窗 -->
     <div id="new-chat-modal" class="modal-overlay hidden">
         <div class="reply-box">
             <h3>💬 发起新私聊</h3>
@@ -530,7 +512,6 @@
         </div>
     </div>
 
-    <!-- 表情包描述填写弹窗 -->
     <div id="sticker-desc-modal" class="modal-overlay hidden">
         <div class="reply-box">
             <h3>😊 添加表情包</h3>
