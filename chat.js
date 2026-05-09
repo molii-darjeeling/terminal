@@ -382,63 +382,71 @@ function renderMessages() {
         `;
         container.appendChild(row);
 
-        // --- 4. 绑定悬浮菜单长按事件 (终极防系统打断版) ---
+       // --- 4. 绑定悬浮菜单长按事件 ---
         setTimeout(() => {
             const bubbleEl = row.querySelector(`.${targetClass}`);
             if (bubbleEl) {
-                let pressTimer;
-                let isDragging = false;
-                let startX = 0, startY = 0;
-                
-                // 彻底阻止浏览器自带的长按菜单
-                bubbleEl.ontouchend = (e) => { 
-                    clearTimeout(pressTimer); 
-                    if(window.globalLongPressActive) {
-                        e.stopPropagation(); 
-                        if(e.cancelable) e.preventDefault(); // 强行阻断系统后续的点击、放大镜等事件
-                    } 
+                let pressTimer = null;
+                let startX = 0;
+                let startY = 0;
+
+                const clearPress = () => {
+                    if (pressTimer) {
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                    }
                 };
-                
+
                 const startPress = (e) => {
                     if (index === editingMsgIndex) return; 
-                    isDragging = false;
+                    
+                    // 记录按下的初始坐标 (兼容手机 Touch 和电脑 Mouse)
+                    startX = e.touches ? e.touches[0].clientX : e.clientX;
+                    startY = e.touches ? e.touches[0].clientY : e.clientY;
+                    
                     window.globalLongPressActive = false;
                     
-                    if (e.touches && e.touches.length > 0) {
-                        startX = e.touches[0].clientX;
-                        startY = e.touches[0].clientY;
-                    }
-                    
-                    // 降到 400 毫秒，比系统判定更快一步触发
                     pressTimer = setTimeout(() => {
-                        if (!isDragging) {
-                            window.globalLongPressActive = true;
-                            openFloatingMenu(e, index, bubbleEl);
-                            if(navigator.vibrate) navigator.vibrate(50);
-                        }
-                    }, 400); 
+                        window.globalLongPressActive = true;
+                        openFloatingMenu(e, index, bubbleEl);
+                        if(navigator.vibrate) navigator.vibrate(50);
+                    }, 500); // 500毫秒触发长按
                 };
-                
-                bubbleEl.ontouchmove = (e) => {
-                    if (e.touches && e.touches.length > 0) {
-                        const moveX = e.touches[0].clientX;
-                        const moveY = e.touches[0].clientY;
-                        if (Math.abs(moveX - startX) > 10 || Math.abs(moveY - startY) > 10) {
-                            isDragging = true; 
-                            clearTimeout(pressTimer); 
-                        }
+
+                const movePress = (e) => {
+                    if (!pressTimer) return;
+                    
+                    // 获取移动中的坐标
+                    const moveX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const moveY = e.touches ? e.touches[0].clientY : e.clientY;
+                    
+                    // 【防抖容错】：手指滑动超过 10px 才算滑动屏幕，取消长按；10px 以内的微小抖动依然算作长按
+                    if (Math.abs(moveX - startX) > 10 || Math.abs(moveY - startY) > 10) {
+                        clearPress();
                     }
                 };
-                
-                bubbleEl.ontouchstart = startPress;
-                // 加入 ontouchcancel 防止系统级滑动打断
-                bubbleEl.ontouchcancel = () => { clearTimeout(pressTimer); };
-                bubbleEl.ontouchend = (e) => { clearTimeout(pressTimer); if(window.globalLongPressActive) e.stopPropagation(); };
 
-                bubbleEl.onmousedown = startPress;
-                bubbleEl.onmousemove = () => { isDragging = true; clearTimeout(pressTimer); };
-                bubbleEl.onmouseup = (e) => { clearTimeout(pressTimer); if(window.globalLongPressActive) e.stopPropagation(); };
-                bubbleEl.onmouseleave = () => clearTimeout(pressTimer);
+                // --- 手机端 Touch 事件 ---
+                bubbleEl.addEventListener('touchstart', startPress, { passive: true });
+                bubbleEl.addEventListener('touchmove', movePress, { passive: true });
+                bubbleEl.addEventListener('touchend', (e) => {
+                    clearPress();
+                    if (window.globalLongPressActive && e.cancelable) {
+                        e.preventDefault(); // 防止长按后松手触发了气泡的其他点击事件
+                    }
+                }, { passive: false });
+                bubbleEl.addEventListener('touchcancel', clearPress);
+
+                // --- 电脑端 Mouse 事件 ---
+                bubbleEl.addEventListener('mousedown', startPress);
+                bubbleEl.addEventListener('mousemove', movePress);
+                bubbleEl.addEventListener('mouseup', clearPress);
+                bubbleEl.addEventListener('mouseleave', clearPress);
+
+                // --- 【核心防冲突】禁用原生的长按菜单 ---
+                bubbleEl.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                });
             }
         }, 0);
     });
@@ -450,6 +458,11 @@ function scrollToBottom() {
     const container = document.getElementById('chat-msg-container');
     container.scrollTop = container.scrollHeight;
 }
+function scrollToBottom() {
+    const container = document.getElementById('chat-msg-container');
+    container.scrollTop = container.scrollHeight;
+}
+
 // --- Floating Menu Actions (新增悬浮操作) ---
 
 function openFloatingMenu(e, index, bubbleEl) {

@@ -459,14 +459,25 @@ input, textarea, select {
     word-break: break-word;
     position: relative;
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    max-width: 85%; 
     min-width: 20px; /* 防止只有表情时太窄 */
     word-wrap: break-word;
-    }
-    /* 确保左右两边的容器都不限制宽度 */
+    
+    /* ----- 新增：屏蔽原生移动端长按和选中行为 ----- */
+    -webkit-touch-callout: none; /* 禁用 iOS 的长按弹出菜单 */
+    -webkit-user-select: none;   /* 禁用 Safari/Chrome 文本选中 */
+    user-select: none;           /* 禁用标准文本选中 */
+}
+
+/* 确保左右两边的容器都不限制宽度 */
 .chat-bubble-row .right, 
 .chat-bubble-row .left {
     max-width: 100%; /* 确保容器本身占满行 */
+}
+
+/* ----- 新增：确保行内编辑框依然可以正常打字和选择文本 ----- */
+.inline-edit-input {
+    user-select: text;
+    -webkit-user-select: text;
 }
 .left .chat-bubble-content { background: white; color: var(--text-body); border-top-left-radius: 2px; }
 .right .chat-bubble-content { background: var(--nav-bg); color: white; border-top-right-radius: 2px; }
@@ -638,7 +649,6 @@ input, textarea, select {
     white-space: nowrap; /* 防止时间换行 */
     margin-bottom: 2px; /* 跟气泡底部稍微对齐 */
 }
-
 /* ==========================================
    新增修改功能样式 (长按菜单、语音、Toast)
    ========================================== */
@@ -763,12 +773,4 @@ input, textarea, select {
     opacity: 0;
     display: block !important; /* 覆盖原始 hidden 的 display:none 保证动画生效 */
     pointer-events: none;
-}
-/* 彻底禁用手机系统默认的长按选中、放大镜、双击缩放和原生菜单 */
-.chat-bubble-content, .chat-bubble-content * {
-    -webkit-touch-callout: none !important; 
-    -webkit-user-select: none !important;   
-    user-select: none !important;           
-    touch-action: pan-y !important; /* 极其关键：告诉系统这个区域只允许上下滑动，绝对禁止双击缩放和长按放大镜！ */
-    -webkit-tap-highlight-color: transparent !important; /* 消除安卓点击时的灰色阴影 */
 }
