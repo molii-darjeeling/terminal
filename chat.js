@@ -353,28 +353,22 @@ function renderMessages() {
                 </div>
             `;
         } else if (isVoice) {
+            // 新增：高清、纯净、自适应颜色的 SVG 语音图标
+            const voiceIconSvg = `<svg style="width:18px; height:18px; margin-right:6px; vertical-align:middle; margin-bottom:2px; flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>`;
+
             innerHTMLContent = `
                 <div style="display:flex; align-items:flex-end; gap:5px;">
                     ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                     <div style="display:flex; flex-direction:column; align-items:${isMe ? 'flex-end' : 'flex-start'};">
-                        <div class="chat-bubble-content voice-bubble ${targetClass}" style="${bubbleLayout}" onclick="toggleVoiceText(event, ${index})">
-                            <span style="font-size:1.1rem; margin-right:5px;">🔊</span> [语音] ${voiceDuration}"
+                        <div class="chat-bubble-content voice-bubble ${targetClass}" style="${bubbleLayout}; display:flex; align-items:center;" onclick="toggleVoiceText(event, ${index})">
+                            ${voiceIconSvg} 语音 ${voiceDuration}"
                         </div>
                         <div id="voice-text-${index}" class="voice-text hidden">${msgContent}</div>
                     </div>
                     ${!isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                 </div>
             `;
-        } else {
-            innerHTMLContent = `
-                <div style="display:flex; align-items:flex-end; gap:5px;">
-                    ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
-                    <div class="chat-bubble-content ${targetClass}" style="${bubbleLayout}">${bubbleContent}</div>
-                    ${!isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
-                </div>
-            `;
         }
-
         row.innerHTML = `
             ${!isMe ? `<img src="${avatarSrc}" class="chat-bubble-avatar">` : ''}
             ${innerHTMLContent}
