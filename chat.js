@@ -391,7 +391,13 @@ function renderMessages() {
                 let startX = 0, startY = 0;
                 
                 // 彻底阻止浏览器自带的长按菜单
-                bubbleEl.oncontextmenu = (e) => { e.preventDefault(); };
+                bubbleEl.ontouchend = (e) => { 
+                    clearTimeout(pressTimer); 
+                    if(window.globalLongPressActive) {
+                        e.stopPropagation(); 
+                        if(e.cancelable) e.preventDefault(); // 强行阻断系统后续的点击、放大镜等事件
+                    } 
+                };
                 
                 const startPress = (e) => {
                     if (index === editingMsgIndex) return; 
