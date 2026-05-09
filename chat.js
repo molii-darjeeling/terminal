@@ -382,28 +382,51 @@ function renderMessages() {
         `;
         container.appendChild(row);
 
-        // --- 4. 绑定悬浮菜单长按事件 ---
+        // --- 4. 绑定悬浮菜单长按事件 (终极防系统打断版) ---
         setTimeout(() => {
             const bubbleEl = row.querySelector(`.${targetClass}`);
             if (bubbleEl) {
                 let pressTimer;
                 let isDragging = false;
+                let startX = 0, startY = 0;
+                
+                // 彻底阻止浏览器自带的长按菜单
+                bubbleEl.oncontextmenu = (e) => { e.preventDefault(); };
                 
                 const startPress = (e) => {
                     if (index === editingMsgIndex) return; 
                     isDragging = false;
                     window.globalLongPressActive = false;
+                    
+                    if (e.touches && e.touches.length > 0) {
+                        startX = e.touches[0].clientX;
+                        startY = e.touches[0].clientY;
+                    }
+                    
+                    // 降到 400 毫秒，比系统判定更快一步触发
                     pressTimer = setTimeout(() => {
                         if (!isDragging) {
                             window.globalLongPressActive = true;
                             openFloatingMenu(e, index, bubbleEl);
                             if(navigator.vibrate) navigator.vibrate(50);
                         }
-                    }, 500);
+                    }, 400); 
+                };
+                
+                bubbleEl.ontouchmove = (e) => {
+                    if (e.touches && e.touches.length > 0) {
+                        const moveX = e.touches[0].clientX;
+                        const moveY = e.touches[0].clientY;
+                        if (Math.abs(moveX - startX) > 10 || Math.abs(moveY - startY) > 10) {
+                            isDragging = true; 
+                            clearTimeout(pressTimer); 
+                        }
+                    }
                 };
                 
                 bubbleEl.ontouchstart = startPress;
-                bubbleEl.ontouchmove = () => { isDragging = true; clearTimeout(pressTimer); };
+                // 加入 ontouchcancel 防止系统级滑动打断
+                bubbleEl.ontouchcancel = () => { clearTimeout(pressTimer); };
                 bubbleEl.ontouchend = (e) => { clearTimeout(pressTimer); if(window.globalLongPressActive) e.stopPropagation(); };
 
                 bubbleEl.onmousedown = startPress;
@@ -421,7 +444,6 @@ function scrollToBottom() {
     const container = document.getElementById('chat-msg-container');
     container.scrollTop = container.scrollHeight;
 }
-
 // --- Floating Menu Actions (新增悬浮操作) ---
 
 function openFloatingMenu(e, index, bubbleEl) {
