@@ -764,3 +764,8 @@ input, textarea, select {
     display: block !important; /* 覆盖原始 hidden 的 display:none 保证动画生效 */
     pointer-events: none;
 }
+.chat-bubble-content {
+    -webkit-touch-callout: none !important; /* 禁用 iOS 的原生长按弹出 */
+    -webkit-user-select: none !important;   /* 禁用长按选中文本 */
+    user-select: none !important;           /* 禁用长按选中文本 */
+}
