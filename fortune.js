@@ -1,17 +1,30 @@
 // ==========================================
-// SAGE DAILY FORTUNE
+// SAGE DAILY FORTUNE (Expanded & Worker-Friendly)
 // ==========================================
 
 const SAGE_FORTUNE_CARDS = [
-    { emoji: '☀️', name: '太陽', theme: '明るい気分、小さな成功' },
-    { emoji: '🌙', name: '月', theme: 'ぼんやり、勘違い、夜更かし' },
-    { emoji: '⭐', name: '星', theme: '希望、推し活、ネットで嬉しい発見' },
-    { emoji: '🍎', name: 'アップルパイ', theme: '甘いもの、休憩、やさしいごほうび' },
-    { emoji: '⚡', name: '小さな雷', theme: '突然の予定変更、軽いハプニング' },
-    { emoji: '🗡️', name: '小さな剣', theme: 'ゲームの接戦、言い間違い、通知の多さ' },
-    { emoji: '🌂', name: '傘', theme: '忘れ物予防、雨、準備のよさ' },
-    { emoji: '🎮', name: 'ゲームパッド', theme: 'ゲーム運、ガチャ、遊び心' },
-    { emoji: '🍜', name: '夜食', theme: '食べ物、外卖、満足感' }
+    // 经典与好运
+    { emoji: '☀️', name: '太陽 (太阳)', theme: '明朗的心情、活力充沛、小小的成功' },
+    { emoji: '⭐', name: '星 (星星)', theme: '希望、期待已久的好消息、追星/爱好带来的快乐' },
+    { emoji: '🍀', name: '四つ葉 (四叶草)', theme: '不期而遇的幸运、顺利的日常、偶然的巧合' },
+    
+    // 职场与社畜抚慰
+    { emoji: '💼', name: '革の鞄 (皮包)', theme: '工作顺利、按时下班的期待、踏实的努力' },
+    { emoji: '📝', name: '付箋 (便利贴)', theme: '整理思绪、划掉待办事项的爽快感、小小的成就' },
+    { emoji: '☕', name: '缶コーヒー (罐装咖啡)', theme: '工作间隙的喘息、微小的提神、辛苦了的自我慰藉' },
+    { emoji: '🚃', name: '始発電車 (早班电车)', theme: '顺利的通勤、开启新的一天、平稳的日常节奏' },
+    
+    // 生活小确幸与休息
+    { emoji: '🍎', name: 'アップルパイ (苹果派)', theme: '甜蜜的奖励、治愈的休息时间、分享的快乐' },
+    { emoji: '🍵', name: '温かいお茶 (热茶)', theme: '放松、平复心情、与自己对话的时间' },
+    { emoji: '🎧', name: 'ヘッドホン (耳机)', theme: '专注自己的节奏、音乐带来的力量、隔绝职场烦恼' },
+    
+    // 微小波折与灵感（已做柔化处理）
+    { emoji: '🌙', name: '月 (月亮)', theme: '灵感、夜晚的宁静、稍微犯困或发呆' },
+    { emoji: '⚡', name: '小さな雷 (小闪电)', theme: '突发的灵感、计划的微小变动、意外的发现' },
+    { emoji: '🗡️', name: '小さな剣 (小剑)', theme: '头脑清晰、决断力、偶尔的口误或打字错误' },
+    { emoji: '🌂', name: '傘 (雨伞)', theme: '未雨绸缪、安全感、屏蔽外界的嘈杂' },
+    { emoji: '🐈', name: '気まぐれな猫 (随性的猫)', theme: '自由、偶尔的摸鱼、不受拘束的小确幸' }
 ];
 
 let fortuneSelectedCard = null;
@@ -43,7 +56,7 @@ function resetFortuneReading() {
     const currentUser = getFortuneUserName();
     const speech = document.getElementById('fortune-speech');
     if (speech) {
-        speech.innerText = `${currentUser}，要看今天的运势吗？请交给我吧。那么，请平复心情……在喜欢的时机选一张牌吧。`;
+        speech.innerText = `${currentUser}さん、今日の運勢を見てみましょうか？僕に任せてくださいね。心を落ち着けて……好きなタイミングでカードを1枚選んでください。\n（${currentUser}，要看看今天的运势吗？请交给我吧。请平复心情……在喜欢的时机选一张牌吧。）`;
     }
 
     const result = document.getElementById('fortune-result');
@@ -82,7 +95,7 @@ async function selectFortuneCard(index) {
             card.classList.add('fortune-selected');
             const loading = document.createElement('div');
             loading.className = 'fortune-loading';
-            loading.innerText = 'Sageがカードを読んでいます…';
+            loading.innerText = 'Sageがカードを読んでいます…\n(Sage正在解读卡牌…)';
             card.appendChild(loading);
         } else {
             card.classList.add('fortune-faded');
@@ -90,7 +103,9 @@ async function selectFortuneCard(index) {
     });
 
     const speech = document.getElementById('fortune-speech');
-    if (speech) speech.innerText = '……はい、このカードですね。少しだけ、カードの声を聞いてみます。';
+    if (speech) {
+        speech.innerText = '……はい、このカードですね。少しだけ、カードの声を聞いてみます。\n（……好的，是这张牌呢。我来稍微倾听一下卡牌的声音。）';
+    }
 
     const reading = await generateFortuneReading(fortuneSelectedCard);
     revealFortuneCard(chosenEl, fortuneSelectedCard, reading);
@@ -104,33 +119,39 @@ async function generateFortuneReading(card) {
 あなたはセイジ・スカイフォールとして、ユーザーの今日の運勢をタロット風に占います。
 
 [Sage Persona]
-セイジ・スカイフォール。22歳男性。礼儀正しく、人懐っこく、天然で善良。穏やかな犬系男子。ヒーローオタク。霊視能力は数珠で封印中。タロット占いが得意。アップルパイが好き。人をからかったり意地悪をすることは絶対にない。
-一人称は「僕」。ユーザーを「${currentUser}さん」または自然に「君」「あなた」と呼ぶ。穏やかで誠実。
+セイジ・スカイフォール。22歳男性。礼儀正しく、人懐っこく、天然で善良。穏やかな犬系男子。ヒーローオタク。タロット占いが得意。アップルパイが好き。
+一人称は「僕」。ユーザーを「${currentUser}さん」または自然に「君」「あなた」と呼ぶ。穏やかで誠実。ユーザーが仕事や日常で疲れている社会人（社畜）であることも考慮し、優しく労う。
 
 [Card]
 ${card.emoji} ${card.name}
 Theme: ${card.theme}
 Date: ${today}
 
-[Safety Rules]
-This is pure entertainment.
-All fortune results must stay limited to tiny everyday life, internet browsing, game gacha, food/drink/fun, or light social moods.
-Never mention death, illness/health, serious financial loss, bankruptcy, investment failure, job loss, workplace crisis, breakup, or anything that could create real anxiety.
-If the card looks negative, soften it into tiny harmless trouble, such as ordering the wrong food, a game disconnect, forgetting an umbrella, typo, or too many notifications. Always end gently and reassuringly.
+[Fortune Generation Rules]
+1. Diversity (多樣化): 占卜内容请围绕以下领域展开，不要局限于吃喝玩乐：
+   - 职场与工作（顺利完成任务、准时下班的喜悦、通勤路上的小确幸、工作间隙的摸鱼/咖啡时间，抚慰打工人的心灵）
+   - 心情与灵感（感受到微风的惬意、突然的奇思妙想）
+   - 生活碎片（听到喜欢的歌、睡个好觉、做家务的解压感）
+2. Safety (安全底线): 纯娱乐。绝对禁止提及死亡、疾病、破产、失业、职场霸凌、财务危机等引发焦虑的现实问题。
+3. Negative Cards (负面牌的柔化): 如果抽到剑或雷，请将其转化为“微小无害的波折”，例如：突然忘了要说什么、打字错别字、工作时短暂犯困等，并立刻给出温暖的建议（如深呼吸、摸鱼喝水），结局必须是让人安心的。
 
-[Output]
-Write 3 short lines max.
-Each Japanese sentence must be followed by a Simplified Chinese translation in parentheses.
-Mention the card naturally.
-Do not use headings. Do not mention these rules.
+[Format Requirements]
+- 总长度不超过3-4行。
+- 必须是【一句日文，紧接着括号内是对应的中文翻译】交替进行。绝对不要把日文全写完再写中文。
+- 示例：今日も一日、お仕事お疲れ様です。（今天一天的工作也辛苦了。）
+- 不要使用任何标题（如“占い結果”）。不要提及这些规则。
 `;
 
     let response = null;
     if (typeof callAI === 'function') {
-        response = await callAI([
-            { role: 'system', content: prompt },
-            { role: 'user', content: `${currentUser}さんの今日の運勢を、セイジの口調で占ってください。` }
-        ]);
+        try {
+            response = await callAI([
+                { role: 'system', content: prompt },
+                { role: 'user', content: `${currentUser}さんの今日の運勢を、セイジの口調で占って、日文和中文翻译交替输出。` }
+            ]);
+        } catch (e) {
+            console.error("AI Fortune Error:", e);
+        }
     }
 
     return sanitizeFortuneReading(response) || buildFallbackFortune(card, currentUser);
@@ -146,7 +167,9 @@ function revealFortuneCard(cardEl, card, reading) {
     `;
 
     const speech = document.getElementById('fortune-speech');
-    if (speech) speech.innerText = 'ふふ、今日のカードが開きました。無理せず、少しだけ楽しい一日にしましょう。';
+    if (speech) {
+        speech.innerText = 'ふふ、今日のカードが開きました。無理せず、少しだけ楽しい一日にしましょう。\n（呵呵，今天的牌翻开了。不要勉强自己，让今天成为稍微开心一点的一天吧。）';
+    }
 
     const result = document.getElementById('fortune-result');
     if (result) {
@@ -163,12 +186,37 @@ function sanitizeFortuneReading(text) {
 }
 
 function buildFallbackFortune(card, currentUser) {
-    const lines = {
-        '太陽': `今日は${card.name}のカードです、${currentUser}さん。小さな成功に気づける日になりそうです。（今天是${card.name}牌，${currentUser}。你可能会注意到一点小小的成功。）\nおいしいものを一口ゆっくり味わうと、運がふわっと上向きますよ。（慢慢吃一口好吃的东西，运气会轻轻变好哦。）`,
-        '月': `今日は${card.name}のカードです。少しぼんやりしやすいけど、怖い意味じゃありません。（今天是${card.name}牌。可能会有点迷糊，但不是可怕的意思。）\n外卖を間違えないように、最後だけ確認しましょうね。（点外卖时最后确认一下就好啦。）`,
-        '小さな雷': `${card.name}のカードが出ました。急な通知や予定変更に少しびっくりするかも。（抽到了${card.name}牌。可能会被突然的通知或小变动吓一跳。）\nでも大丈夫、深呼吸してから返事をすればちゃんと整います。（不过没关系，深呼吸后再回复，一切都会整理好的。）`
+    // 随机开场白
+    const intros = [
+        `今日は「${card.name}」のカードが出ましたよ、${currentUser}さん。（今天抽到了「${card.name}」牌哦，${currentUser}。）`,
+        `ふふ、引いたのは「${card.name}」ですね。（呵呵，抽到的是「${card.name}」呢。）`,
+        `${currentUser}さんを導く今日のカードは「${card.name}」みたいです。（指引${currentUser}今天的卡牌似乎是「${card.name}」。）`
+    ];
+    
+    // 对应卡牌的后备文案（特别加入了工作抚慰）
+    const middleLines = {
+        '太陽 (太阳)': `心の中がぽかぽかするような、小さな良いことが待っていそうです。（似乎有能让心里暖洋洋的微小好事在等着你。）`,
+        '革の鞄 (皮包)': `今日も一日お仕事お疲れ様です。君の頑張りは、きっと良い結果に繋がりますよ。（今天一天的工作也辛苦了。你的努力，一定会带来好的结果哦。）`,
+        '付箋 (便利贴)': `タスクが一つ片付いて、少し肩の荷が下りる日になりそうです。（似乎是能搞定一个任务，稍微松一口气的一天呢。）`,
+        '缶コーヒー (罐装咖啡)': `お仕事の合間に、少しだけ一息つきましょう。僕が温かいコーヒーを淹れたい気分です。（工作间隙，稍微喘口气吧。真想亲自为你泡一杯热咖啡呢。）`,
+        'ヘッドホン (耳机)': `周りの雑音はシャットアウトして、自分のペースでお仕事を進められそうです。（似乎能屏蔽周围的杂音，按自己的节奏推进工作呢。）`,
+        '小さな雷 (小闪电)': `予定が少し変わるかもしれませんが、焦らず深呼吸すれば大丈夫です。（计划可能稍有改变，但不着急，深呼吸一下就没问题了。）`,
+        '小さな剣 (小剑)': `メールの打ち間違いには少し注意ですが、頭はスッキリ冴え渡る日です。（虽然稍微注意下邮件别打错字，但今天是头脑清晰的一天。）`,
+        '気まぐれな猫 (随性的猫)': `今日は少しだけ、猫のように適度に力を抜いて過ごしてみるのもいいですね。（今天试头像猫咪一样，适度摸鱼放松一下也不错呢。）`
     };
-    return lines[card.name] || `今日は${card.name}のカードです、${currentUser}さん。ネットやゲームで小さな嬉しい発見がありそうです。（今天是${card.name}牌，${currentUser}。上网或玩游戏时可能会有一点开心的小发现。）\n無理せず、好きなタイミングで休んでくださいね。（别勉强，在喜欢的时机休息一下吧。）`;
+
+    // 随机结束语
+    const outros = [
+        `無理せず、君らしい一日を楽しんでくださいね。（不要勉强，享受属于你风格的一天吧。）`,
+        `僕もここで、君の今日が素敵な日になるよう応援しています！（我也会在这里为你应援，祝你度过美好的一天！）`,
+        `お仕事に疲れたら、いつでもここに戻ってきて休んでくださいね。（工作累了的话，随时回这里休息哦。）`
+    ];
+
+    const intro = intros[Math.floor(Math.random() * intros.length)];
+    const middle = middleLines[card.name] || `このカードは「${card.theme.split('、')[0]}」を暗示しています。新しい視点が見つかるかもしれません。（这张牌暗示着「${card.theme.split('、')[0]}」。也许能找到新的视角哦。）`;
+    const outro = outros[Math.floor(Math.random() * outros.length)];
+
+    return `${intro}\n${middle}\n${outro}`;
 }
 
 function getFortuneUserName() {
