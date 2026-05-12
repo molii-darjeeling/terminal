@@ -50,6 +50,7 @@ let currentChatConfig = {
     historyLimit: 20,
     activeWorldBookIndices: [], 
     activeProfileIdx: 0,
+    replyLanguage: "zh",
     summaryOn: "off",     
     summaryInterval: 10,
     summaryContent: ""
@@ -218,6 +219,7 @@ function createNewChat() {
         isPinned: false,
         settings: {
             bg: "", historyLimit: 20, wbIndices: [], profileIdx: (typeof currentProfileIndex !== 'undefined' ? currentProfileIndex : 0),
+            replyLanguage: "zh",
             summaryOn: "off", summaryInterval: 10, summaryContent: ""
         },
         messages: [],
@@ -243,6 +245,7 @@ function enterChatRoom(chatId) {
         historyLimit: chat.settings.historyLimit || 20,
         activeWorldBookIndices: safeWbIndices, 
         activeProfileIdx: chat.settings.profileIdx !== undefined ? chat.settings.profileIdx : currentProfileIndex,
+        replyLanguage: chat.settings.replyLanguage || "zh",
         summaryOn: chat.settings.summaryOn || "off",
         summaryInterval: chat.settings.summaryInterval || 10,
         summaryContent: chat.settings.summaryContent || ""
@@ -321,7 +324,9 @@ function renderMessages() {
         }
 
         let bubbleContent = "";
-        if (msg.type === 'sticker') {
+        if (msg.type === 'transfer') {
+            bubbleContent = renderTransferCardBody(msg, isMe, role, chatUser);
+        } else if (msg.type === 'sticker') {
             bubbleContent = `<img src="${msg.content}" class="chat-sticker-img">`;
         } else {
             bubbleContent = msgContent.replace(/\n/g, '<br>');
@@ -350,6 +355,14 @@ function renderMessages() {
                             <button class="sys-btn" style="width:auto; padding:5px 15px; font-size:0.8rem; margin:0;" onclick="saveEditMsg(${index}, ${isVoice})">完成</button>
                         </div>
                     </div>
+                </div>
+            `;
+        } else if (msg.type === 'transfer') {
+            innerHTMLContent = `
+                <div style="display:flex; align-items:flex-end; gap:5px;">
+                    ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
+                    <div class="chat-bubble-content transfer-card ${targetClass}">${bubbleContent}</div>
+                    ${!isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                 </div>
             `;
         } else if (isVoice) {
@@ -524,7 +537,8 @@ function copyMsg(e) {
     if (!text && currentChatId && targetMsgIndex !== -1) {
         const chat = chats.find(c => c.id === currentChatId);
         if (chat && chat.messages[targetMsgIndex]) {
-            text = chat.messages[targetMsgIndex].content;
+            const targetMsg = chat.messages[targetMsgIndex];
+            text = targetMsg.type === 'transfer' ? formatTransferText(targetMsg, roles.find(r => r.id === chat.roleId)) : targetMsg.content;
             // 清理可能带有的语音前缀
             if (text.startsWith('[语音]')) text = text.replace(/^\[语音\]\s*/, '').trim();
         }
@@ -566,6 +580,13 @@ function showToast(msg) {
 }
 
 function editMsg() {
+    const chat = chats.find(c => c.id === currentChatId);
+    const msg = chat && chat.messages[targetMsgIndex];
+    if (msg && msg.type === 'transfer') {
+        showToast('转账卡片不可编辑');
+        closeFloatingMenu();
+        return;
+    }
     editingMsgIndex = targetMsgIndex;
     closeFloatingMenu();
     renderMessages();
@@ -618,6 +639,25 @@ function sendVoiceMessage() {
     if (!text) return;
     appendMessage('user', '[语音] ' + text, 'text');
     closeVoiceModal();
+}
+function openTransferModal() {
+    document.getElementById('transfer-amount-input').value = "";
+    document.getElementById('transfer-note-input').value = "";
+    document.getElementById('transfer-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('transfer-amount-input').focus(), 50);
+}
+function closeTransferModal() {
+    document.getElementById('transfer-modal').classList.add('hidden');
+}
+function sendTransferMessage() {
+    const amount = Number(document.getElementById('transfer-amount-input').value);
+    const note = document.getElementById('transfer-note-input').value.trim();
+    if (!Number.isFinite(amount) || amount <= 0) {
+        alert("请填写有效金额");
+        return;
+    }
+    appendTransferMessage('user', amount, note);
+    closeTransferModal();
 }
 function toggleVoiceText(e, index) {
     if (window.globalLongPressActive) {
@@ -683,6 +723,7 @@ async function triggerChatGen() {
 
     const role = roles.find(r => r.id === chat.roleId);
     const chatUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
+    const replyLanguageName = currentChatConfig.replyLanguage === 'ja' ? 'Japanese' : 'Simplified Chinese';
     
     chatAbortController = new AbortController();
     btnImg.src = ICON_STOP;
@@ -719,6 +760,8 @@ async function triggerChatGen() {
             content = "[撤回了一条消息]";
         } else if (m.type === 'sticker') {
             content = `[发了一个表情包: ${m.desc || '图片'}]`;
+        } else if (m.type === 'transfer') {
+            content = formatTransferText(m, role);
         } else {
             content = m.content;
         }
@@ -748,6 +791,15 @@ async function triggerChatGen() {
 
     [CHAT HISTORY]
     ${historyText}
+
+    [REPLY LANGUAGE]
+    No matter what language the user uses, you must reply only in ${replyLanguageName}.
+
+    [TRANSFER FEATURE]
+    This chat supports decorative USD transfers. The user can transfer money to you, and you may also transfer money to the user for fun.
+    If you want to send a transfer card, output one separate message exactly like this:
+    [转账] 12.5 | coffee
+    The amount is USD. The note after | is optional. Do not calculate balances.
     `;
     
     const aiResponse = await callAI([
@@ -787,6 +839,9 @@ async function triggerChatGen() {
                      chat.messages.push({ sender: 'role', content: "", type: 'text', isRecalled: true, timestamp: Date.now() });
                      chat.lastTime = Date.now();
                      saveChatData(); renderMessages();
+                } else if (isTransferCommand(part)) {
+                     const transfer = parseTransferCommand(part);
+                     appendTransferMessage('role', transfer.amount, transfer.note);
                 } else {
                      appendMessage('role', part, 'text');
                 }
@@ -804,6 +859,68 @@ function appendMessage(sender, content, type, desc = "") {
     chat.messages.push({ sender: sender, content: content, type: type, desc: desc, timestamp: Date.now() });
     chat.lastTime = Date.now();
     saveChatData(); renderMessages();
+}
+
+function appendTransferMessage(sender, amount, note = "") {
+    const chat = chats.find(c => c.id === currentChatId);
+    if(!chat) return;
+    chat.messages.push({
+        sender,
+        type: 'transfer',
+        amount: Math.round(Number(amount) * 100) / 100,
+        note,
+        currency: 'USD',
+        content: `[转账] $${formatTransferAmount(amount)}${note ? ` (${note})` : ''}`,
+        timestamp: Date.now()
+    });
+    chat.lastTime = Date.now();
+    saveChatData();
+    renderMessages();
+}
+
+function renderTransferCardBody(msg, isMe, role, chatUser) {
+    const name = isMe ? (role ? role.name : '对方') : (chatUser ? chatUser.name : '你');
+    const label = isMe ? `转账给 ${name}` : `转账给 ${name}`;
+    const note = msg.note ? `<div class="transfer-card-note">${escapeChatHTML(msg.note)}</div>` : '';
+    return `
+        <div class="transfer-card-label">${escapeChatHTML(label)}</div>
+        <div class="transfer-card-amount">$${formatTransferAmount(msg.amount)}<span class="transfer-card-currency">USD</span></div>
+        ${note}
+    `;
+}
+
+function formatTransferText(msg, role) {
+    const direction = msg.sender === 'user' ? `转账给${role ? role.name : '对方'}` : '对方向你转账';
+    const note = msg.note ? `，备注：${msg.note}` : '';
+    return `[${direction}] $${formatTransferAmount(msg.amount)} USD${note}`;
+}
+
+function formatTransferAmount(amount) {
+    const n = Number(amount) || 0;
+    return n.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+}
+
+function isTransferCommand(text) {
+    return /^\[转账\]\s*\d+(\.\d+)?/i.test(String(text || '').trim());
+}
+
+function parseTransferCommand(text) {
+    const raw = String(text || '').trim();
+    const match = raw.match(/^\[转账\]\s*(\$?\s*)?(\d+(?:\.\d+)?)(?:\s*(?:USD|美元))?\s*(?:[|｜]\s*(.*))?$/i);
+    if (!match) return { amount: 0, note: '' };
+    return {
+        amount: Number(match[2]),
+        note: (match[3] || '').trim()
+    };
+}
+
+function escapeChatHTML(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function handleChatToSNS(authorRole, content) {
@@ -894,6 +1011,8 @@ function initSidebarValues() {
     updateWbTriggerText(selectedCount);
 
     document.getElementById('chat-bg-input').value = currentChatConfig.bg;
+    document.getElementById('chat-reply-language').value = currentChatConfig.replyLanguage || "zh";
+    document.getElementById('chat-reply-language').onchange = (e) => updateChatSetting('replyLanguage', e.target.value);
     document.getElementById('chat-history-limit').value = currentChatConfig.historyLimit;
     document.getElementById('chat-history-limit').onchange = (e) => updateChatSetting('historyLimit', e.target.value);
     document.getElementById('chat-summary-toggle').onchange = (e) => updateChatSetting('summaryOn', e.target.value);

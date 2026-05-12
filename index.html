@@ -60,30 +60,26 @@
             </div>
 
             <div class="main-menu-list">
-                <div class="menu-item" onclick="goToSubPage('contacts-page')">
-                    <img src="https://files.catbox.moe/zvhldm.png" class="menu-deco">
-                    <div class="menu-text">通讯录 / CONTACTS</div>
-                    <div class="menu-arrow">▶</div>
+                <div class="menu-item" onclick="goToSubPage('contacts-page')" aria-label="Contacts">
+                    <img src="https://files.catbox.moe/8kzoll.png" class="menu-deco" alt="Contacts">
                 </div>
-                <div class="menu-item" onclick="goToSubPage('world-page')">
-                    <img src="https://files.catbox.moe/zvhldm.png" class="menu-deco">
-                    <div class="menu-text">世界书 / WORLD BOOK</div>
-                    <div class="menu-arrow">▶</div>
+                <div class="menu-item" onclick="goToSubPage('world-page')" aria-label="World Book">
+                    <img src="https://files.catbox.moe/aln0fx.png" class="menu-deco" alt="World Book">
                 </div>
-                <div class="menu-item" onclick="goToSubPage('api-page')">
-                    <img src="https://files.catbox.moe/zvhldm.png" class="menu-deco">
-                    <div class="menu-text">API 设置 / CONFIG</div>
-                    <div class="menu-arrow">▶</div>
+                <div class="menu-item" onclick="goToSubPage('api-page')" aria-label="API Settings">
+                    <img src="https://files.catbox.moe/sgf8mc.png" class="menu-deco" alt="API Settings">
                 </div>
-                <div class="menu-item" onclick="enterSNS()">
-                    <img src="https://files.catbox.moe/zvhldm.png" class="menu-deco">
-                    <div class="menu-text">HELIOS∞Channel</div>
-                    <div class="menu-arrow" style="color:var(--nav-bg)">●</div>
+                <div class="menu-item" onclick="enterSNS()" aria-label="Helios Channel">
+                    <img src="https://files.catbox.moe/316o6c.png" class="menu-deco" alt="Helios Channel">
                 </div>
-                <div class="menu-item" onclick="enterChatList()">
-                    <img src="https://files.catbox.moe/zvhldm.png" class="menu-deco">
-                    <div class="menu-text">私信 / DIRECT MSG</div>
-                    <div class="menu-arrow">▶</div>
+                <div class="menu-item" onclick="enterChatList()" aria-label="Direct Messages">
+                    <img src="https://files.catbox.moe/vrnw7j.png" class="menu-deco" alt="Direct Messages">
+                </div>
+                <div class="menu-item" onclick="enterLedger()" aria-label="Ledger">
+                    <img src="https://files.catbox.moe/wc0543.png" class="menu-deco" alt="Ledger">
+                </div>
+                <div class="menu-item" onclick="enterFortune()" aria-label="Sage Fortune">
+                    <img src="https://files.catbox.moe/tmrb5h.png" class="menu-deco" alt="Sage Fortune">
                 </div>
             </div>
             
@@ -94,6 +90,82 @@
                 </div>
                 <input type="file" id="import-file" class="hidden" accept=".json" onchange="importData(this)">
                 <button style="background:#888; color:white; border:none; padding:5px 10px; border-radius:4px; font-size:0.75rem;" onclick="clearAllData()">⚠️ 清空所有数据</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SAGE FORTUNE -->
+    <div id="fortune-page" class="system-page hidden">
+        <div class="sys-top-bar fortune-top-bar" style="justify-content: space-between; padding: 0 10px;">
+            <div class="back-arrow" onclick="exitFortune()">◀</div>
+            <span>Sage的占卜小屋</span>
+            <div class="fortune-reset-btn" onclick="resetFortuneReading()">↻</div>
+        </div>
+        <div class="fortune-stage">
+            <div class="fortune-orbit fortune-orbit-a"></div>
+            <div class="fortune-orbit fortune-orbit-b"></div>
+
+            <div class="fortune-sage-row">
+                <img src="https://files.catbox.moe/nferuz.png" class="fortune-sage-img" alt="Sage">
+                <div class="fortune-speech" id="fortune-speech">
+                    {{user}}，要看今天的运势吗？请交给我吧。那么，请平复心情……在喜欢的时机选一张牌吧。
+                </div>
+            </div>
+
+            <div class="fortune-card-area" id="fortune-card-area"></div>
+            <div class="fortune-result hidden" id="fortune-result"></div>
+        </div>
+    </div>
+
+    <!-- LEDGER CHAT -->
+    <div id="ledger-page" class="system-page hidden" style="background:#e6ebf0;">
+        <div class="sys-top-bar" style="justify-content: space-between; padding: 0 10px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div class="back-arrow" onclick="exitLedger()">◀</div>
+                <div style="display:flex; flex-direction:column; line-height:1.2;">
+                    <span style="font-weight:bold;">记账本</span>
+                    <span id="ledger-title-status" style="font-size:0.7rem; color:rgba(255,255,255,0.7);"></span>
+                </div>
+            </div>
+            <div style="font-size:1.2rem; cursor:pointer;" onclick="toggleLedgerSidebar()">☰</div>
+        </div>
+
+        <div class="chat-msg-container ledger-msg-container" id="ledger-msg-container"></div>
+
+        <div class="ledger-footer-area">
+            <button class="ledger-action-btn ledger-income-btn" onclick="openLedgerEntryModal('income')">收入</button>
+            <button class="ledger-action-btn ledger-expense-btn" onclick="openLedgerEntryModal('expense')">支出</button>
+        </div>
+
+        <div id="ledger-sidebar-overlay" class="chat-sidebar-overlay hidden" onclick="toggleLedgerSidebar()"></div>
+        <div id="ledger-sidebar" class="chat-sidebar">
+            <div class="sidebar-header">记账设置</div>
+            <div class="sidebar-content">
+                <div class="sidebar-item">
+                    <label>当前身份</label>
+                    <select id="ledger-user-select" class="sys-select"></select>
+                </div>
+                <div class="sidebar-item">
+                    <label>回复语言</label>
+                    <select id="ledger-reply-language" class="sys-select">
+                        <option value="zh">中文</option>
+                        <option value="ja">日语</option>
+                    </select>
+                </div>
+                <div class="sidebar-item">
+                    <div class="ledger-collapse-header" onclick="toggleLedgerRolePanel()">
+                        <label>参与回复的角色</label>
+                        <span id="ledger-role-toggle">▼</span>
+                    </div>
+                    <div id="ledger-role-list" class="ledger-role-list"></div>
+                </div>
+                <div class="sidebar-item">
+                    <label>本月统计</label>
+                    <div class="ledger-stats-card" id="ledger-stats-card"></div>
+                </div>
+                <div class="sidebar-item" style="margin-top:auto; padding-top:20px; border-top:1px solid #eee;">
+                    <button class="sys-btn sys-btn-danger" onclick="clearLedgerData()">清空记账本</button>
+                </div>
             </div>
         </div>
     </div>
@@ -318,6 +390,9 @@
                 
                 <!-- 发语音 (右) -->
                 <img src="https://files.catbox.moe/gn4kcm.png" class="tool-icon" onclick="openVoiceModal()" style="margin: 0; width: 28px; height: 28px; cursor: pointer; object-fit: contain;">
+
+                <!-- 转账 -->
+                <img src="https://files.catbox.moe/8m9vme.png" class="tool-icon" onclick="openTransferModal()" style="margin: 0; width: 28px; height: 28px; cursor: pointer; object-fit: contain;">
             </div>
 
             <!-- 输入行 -->
@@ -340,6 +415,13 @@
                 <div class="sidebar-item">
                     <label>🎭 当前身份 (User)</label>
                     <select id="chat-user-select" class="sys-select"></select>
+                </div>
+                <div class="sidebar-item">
+                    <label>回复语言</label>
+                    <select id="chat-reply-language" class="sys-select">
+                        <option value="zh">中文</option>
+                        <option value="ja">日语</option>
+                    </select>
                 </div>
                 <div class="sidebar-item">
                     <label>🌍 世界书 (可多选)</label>
@@ -396,6 +478,18 @@
             <span>撤回</span>
         </div>
         <div class="floating-menu-item danger" onclick="deleteMsgFromMenu()">
+            <span>🗑️</span>
+            <span>删除</span>
+        </div>
+    </div>
+
+    <div id="ledger-floating-menu" class="floating-menu hidden">
+        <div class="floating-menu-arrow"></div>
+        <div class="floating-menu-item" onclick="copyLedgerMsg(event)">
+            <span>📄</span>
+            <span>复制</span>
+        </div>
+        <div class="floating-menu-item danger" onclick="deleteLedgerMsgFromMenu()">
             <span>🗑️</span>
             <span>删除</span>
         </div>
@@ -496,6 +590,8 @@
     <script src="data.js"></script>
     <script src="sns.js"></script>
     <script src="chat.js"></script>
+    <script src="ledger.js"></script>
+    <script src="fortune.js"></script>
     
     <!-- CHAT 基础弹窗 -->
     <div id="new-chat-modal" class="modal-overlay hidden">
@@ -526,6 +622,42 @@
             <div class="reply-actions">
                 <button class="btn-cancel" onclick="document.getElementById('sticker-desc-modal').classList.add('hidden')">取消</button>
                 <button class="btn-send" onclick="confirmStickerUpload()">确认添加</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="transfer-modal" class="modal-overlay hidden" onclick="closeTransferModal()">
+        <div class="reply-box" onclick="event.stopPropagation()">
+            <h3>转账</h3>
+            <div class="sys-form-group">
+                <label>金额（USD）</label>
+                <input type="number" id="transfer-amount-input" class="sys-input" placeholder="0.00" min="0" step="0.01">
+            </div>
+            <div class="sys-form-group">
+                <label>备注（选填）</label>
+                <input type="text" id="transfer-note-input" class="sys-input" placeholder="例如：咖啡钱">
+            </div>
+            <div class="reply-actions">
+                <button class="btn-cancel" onclick="closeTransferModal()">取消</button>
+                <button class="btn-send" onclick="sendTransferMessage()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ledger-entry-modal" class="modal-overlay hidden" onclick="closeLedgerEntryModal()">
+        <div class="reply-box ledger-entry-box" onclick="event.stopPropagation()">
+            <h3 id="ledger-entry-title">记录支出</h3>
+            <div class="sys-form-group">
+                <label>金额</label>
+                <input type="number" id="ledger-amount-input" class="sys-input" placeholder="0.00" min="0" step="0.01">
+            </div>
+            <div class="sys-form-group">
+                <label>备注（选填）</label>
+                <input type="text" id="ledger-note-input" class="sys-input" placeholder="例如：午饭">
+            </div>
+            <div class="reply-actions">
+                <button class="btn-cancel" onclick="closeLedgerEntryModal()">取消</button>
+                <button class="btn-send" onclick="confirmLedgerEntry()">确定</button>
             </div>
         </div>
     </div>

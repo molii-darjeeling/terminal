@@ -157,16 +157,41 @@ input, textarea, select {
 }
 
 /* Menu */
-.main-menu-list { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-.menu-item {
-    background: white; height: var(--menu-item-height); border-radius: 4px; display: flex; align-items: center;
-    position: relative; cursor: pointer; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    transition: transform 0.1s;
+.main-menu-list {
+    padding: 18px 22px 10px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px 18px;
+    justify-items: center;
 }
-.menu-item:active { transform: scale(0.98); }
-.menu-deco { height: 100%; width: auto; max-width: 40px; object-fit: contain; object-position: left center; margin-right: 10px; }
-.menu-text { font-size: 1.1rem; font-weight: bold; color: var(--text-primary); letter-spacing: 1px; }
-.menu-arrow { margin-left: auto; margin-right: 15px; color: #ccc; }
+.menu-item {
+    width: 74px;
+    height: 74px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 0.1s, filter 0.1s;
+    -webkit-tap-highlight-color: transparent;
+}
+.menu-item:active {
+    transform: scale(0.94);
+    filter: brightness(0.96);
+}
+.menu-deco {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    object-fit: contain;
+    display: block;
+}
+.menu-text,
+.menu-arrow {
+    display: none;
+}
 
 /* Form */
 .sub-page-container { padding: 15px; padding-bottom: 50px; }
@@ -496,7 +521,7 @@ input, textarea, select {
 }
 
 /* Toolbar */
-.chat-toolbar {
+..chat-toolbar {
     padding: 5px 10px; /* 上下5px，左右10px */
     display: flex;
     /* 原来可能是 justify-content: flex-end; */
@@ -773,4 +798,394 @@ input, textarea, select {
     opacity: 0;
     display: block !important; /* 覆盖原始 hidden 的 display:none 保证动画生效 */
     pointer-events: none;
+}
+
+.transfer-card,
+.right .transfer-card {
+    min-width: 175px;
+    max-width: 68vw;
+    border-radius: 12px;
+    padding: 11px 13px;
+    border: 1px solid #cad3df;
+    background: linear-gradient(180deg, #f8fafc, #eef3f8);
+    color: #26384f;
+}
+.left .transfer-card {
+    background: linear-gradient(180deg, #f6f2ec, #eee5da);
+    border-color: #d8cab8;
+    color: #4f3c2b;
+}
+.transfer-card-label {
+    font-size: 0.75rem;
+    font-weight: bold;
+    opacity: 0.72;
+    margin-bottom: 4px;
+}
+.transfer-card-amount {
+    font-size: 1.25rem;
+    font-weight: bold;
+    line-height: 1.2;
+}
+.transfer-card-note {
+    font-size: 0.85rem;
+    margin-top: 6px;
+    opacity: 0.78;
+    word-break: break-word;
+}
+.transfer-card-currency {
+    font-size: 0.75rem;
+    letter-spacing: 0;
+    opacity: 0.7;
+    margin-left: 4px;
+}
+
+/* ==========================================
+   LEDGER CHAT STYLES
+   ========================================== */
+.ledger-msg-container {
+    padding-bottom: 90px;
+}
+
+.ledger-footer-area {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 10px 14px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    background: rgba(240, 242, 245, 0.96);
+    border-top: 1px solid rgba(33, 48, 99, 0.12);
+    z-index: 180;
+    backdrop-filter: blur(8px);
+}
+
+.ledger-action-btn {
+    border: none;
+    border-radius: 8px;
+    min-height: 44px;
+    font-size: 1rem;
+    font-weight: bold;
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    touch-action: manipulation;
+}
+.ledger-action-btn:active { transform: scale(0.98); }
+.ledger-income-btn { background: #e7eef7; border: 1px solid #9db1d4; }
+.ledger-expense-btn { background: #f7ebe7; border: 1px solid #d9a99e; }
+
+.ledger-card {
+    min-width: 170px;
+    max-width: 68vw;
+    border-radius: 12px;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+}
+.ledger-card.income {
+    background: #eef4fb;
+    border-color: #b8c7df;
+    color: #263f6b;
+}
+.ledger-card.expense {
+    background: #f8eeee;
+    border-color: #dfbeb8;
+    color: #73483f;
+}
+.ledger-card-label {
+    font-size: 0.75rem;
+    font-weight: bold;
+    opacity: 0.78;
+    margin-bottom: 4px;
+}
+.ledger-card-amount {
+    font-size: 1.25rem;
+    font-weight: bold;
+    line-height: 1.2;
+}
+.ledger-card-note {
+    font-size: 0.85rem;
+    margin-top: 5px;
+    opacity: 0.78;
+    word-break: break-word;
+}
+
+.ledger-role-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.ledger-collapse-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    cursor: pointer;
+    color: #555;
+}
+.ledger-collapse-header label {
+    margin-bottom: 0;
+    cursor: pointer;
+}
+.ledger-role-list.collapsed {
+    display: none;
+}
+.ledger-role-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f7f8fb;
+    border: 1px solid #e2e5ec;
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 0.9rem;
+}
+.ledger-role-option input {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+.ledger-role-option img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #ddd;
+    flex-shrink: 0;
+}
+
+.ledger-stats-card {
+    background: #f7f8fb;
+    border: 1px solid #e2e5ec;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 0.88rem;
+    color: #444;
+    line-height: 1.7;
+}
+.ledger-stats-card strong {
+    color: var(--text-primary);
+}
+
+.ledger-entry-box {
+    padding-top: 18px;
+}
+
+/* ==========================================
+   SAGE FORTUNE STYLES
+   ========================================== */
+#fortune-page {
+    background:
+        radial-gradient(circle at 16% 18%, rgba(255,255,255,0.35) 0 2px, transparent 3px),
+        radial-gradient(circle at 82% 12%, rgba(255,255,255,0.28) 0 1px, transparent 3px),
+        radial-gradient(circle at 70% 76%, rgba(255,218,132,0.16), transparent 28%),
+        linear-gradient(160deg, #172042 0%, #26335d 46%, #3c334f 100%);
+    overflow: hidden;
+}
+.fortune-top-bar {
+    background: rgba(25, 29, 62, 0.92);
+}
+.fortune-reset-btn {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.15rem;
+}
+.fortune-stage {
+    position: relative;
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 14px 36px;
+    color: #f6f2e8;
+}
+.fortune-orbit {
+    position: fixed;
+    border: 1px solid rgba(246, 225, 166, 0.12);
+    border-radius: 50%;
+    pointer-events: none;
+}
+.fortune-orbit-a {
+    width: 260px;
+    height: 260px;
+    right: -90px;
+    top: 88px;
+}
+.fortune-orbit-b {
+    width: 170px;
+    height: 170px;
+    left: -72px;
+    bottom: 70px;
+}
+.fortune-sage-row {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    max-width: 620px;
+    margin: 0 auto 24px;
+}
+.fortune-sage-img {
+    width: 86px;
+    height: 86px;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 8px 12px rgba(0,0,0,0.25));
+}
+.fortune-speech {
+    position: relative;
+    background: rgba(255, 252, 240, 0.94);
+    color: #334064;
+    border: 1px solid rgba(248, 220, 145, 0.7);
+    border-radius: 12px;
+    padding: 12px 13px;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.18);
+}
+.fortune-speech:before {
+    content: "";
+    position: absolute;
+    left: -8px;
+    top: 22px;
+    width: 14px;
+    height: 14px;
+    background: rgba(255, 252, 240, 0.94);
+    border-left: 1px solid rgba(248, 220, 145, 0.7);
+    border-bottom: 1px solid rgba(248, 220, 145, 0.7);
+    transform: rotate(45deg);
+}
+.fortune-card-area {
+    position: relative;
+    z-index: 2;
+    min-height: 330px;
+    display: grid;
+    grid-template-columns: repeat(3, 92px);
+    justify-content: center;
+    gap: 18px 16px;
+    padding: 14px 0 18px;
+}
+.fortune-card {
+    width: 92px;
+    height: 150px;
+    border: none;
+    border-radius: 10px;
+    padding: 0;
+    background:
+        linear-gradient(135deg, transparent 12px, rgba(255,255,255,0.12) 13px, transparent 14px),
+        linear-gradient(315deg, transparent 12px, rgba(255,255,255,0.12) 13px, transparent 14px),
+        linear-gradient(160deg, #1e2a58, #4a3865);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.24), inset 0 0 0 3px rgba(242, 212, 132, 0.68), inset 0 0 0 8px rgba(255,255,255,0.08);
+    color: #f5dea2;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.28s ease, opacity 0.18s ease, box-shadow 0.28s ease;
+    touch-action: manipulation;
+}
+.fortune-card:before {
+    content: "";
+    position: absolute;
+    inset: 18px 14px;
+    border: 1px solid rgba(245, 222, 162, 0.55);
+    border-radius: 999px;
+}
+.fortune-card:after {
+    content: "✦";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+}
+.fortune-card:active {
+    transform: translateY(3px) scale(0.98);
+}
+.fortune-card.fortune-faded {
+    display: none;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.82);
+}
+.fortune-card.fortune-selected {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: 128px;
+    height: 208px;
+    transform: translateY(8px) scale(1.04);
+    box-shadow: 0 0 30px rgba(246, 225, 166, 0.62), 0 18px 38px rgba(0,0,0,0.32), inset 0 0 0 3px rgba(242, 212, 132, 0.86), inset 0 0 0 8px rgba(255,255,255,0.1);
+    animation: fortuneGlow 1.5s ease-in-out infinite;
+}
+.fortune-card.fortune-revealed {
+    background: linear-gradient(180deg, #fff9eb, #eadfbf);
+    color: #2b3356;
+    animation: none;
+}
+.fortune-card.fortune-revealed:before {
+    border-color: rgba(46, 54, 95, 0.18);
+}
+.fortune-card-face {
+    position: absolute;
+    inset: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    text-align: center;
+}
+.fortune-card-emoji {
+    font-size: 2.2rem;
+}
+.fortune-card-name {
+    font-size: 0.86rem;
+    font-weight: bold;
+    color: #334064;
+}
+.fortune-loading {
+    position: absolute;
+    left: 50%;
+    bottom: -38px;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.82rem;
+    color: #f6e4ad;
+}
+.fortune-result {
+    position: relative;
+    z-index: 2;
+    max-width: 620px;
+    margin: 10px auto 0;
+    background: rgba(255, 252, 240, 0.94);
+    color: #334064;
+    border: 1px solid rgba(248, 220, 145, 0.72);
+    border-radius: 12px;
+    padding: 14px;
+    line-height: 1.65;
+    box-shadow: 0 14px 32px rgba(0,0,0,0.22);
+    white-space: pre-wrap;
+}
+@keyframes fortuneGlow {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.16); }
+}
+
+@media (max-width: 360px) {
+    .fortune-card-area {
+        grid-template-columns: repeat(3, 82px);
+        gap: 16px 10px;
+    }
+    .fortune-card {
+        width: 82px;
+        height: 136px;
+    }
+    .fortune-sage-img {
+        width: 76px;
+        height: 76px;
+    }
 }
