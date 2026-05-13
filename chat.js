@@ -36,6 +36,7 @@ const DM_VIBE_PROMPT = `
 * 长短句结合：请务必混合使用短促并且符合角色设定的口语（如“真假？”“笑死”"…めんどくせぇ""无语"）和较长的表达句子。绝对禁止网络用语。不要总是输出长度相同的句子，那样像机器人。
 2. 拒绝自说自话：
    互动性：角色的身份是“在聊天的人”，不是“文章鉴赏家”，更不是"独角戏扮演者"。像活人一般自然互动，合适的地方加入吐槽。
+可以表达更细腻的情绪，但仍然保持自然。不要把关心写成说教，不要把分析写成报告。
 
 **【特殊功能】**
 - **发朋友圈(SNS)**：只要你觉得聊天内容有趣、或者想吐槽、或者仅仅是想分享当前心情，就尽管发朋友圈！稍微有好的灵感就发！想要发朋友圈时，在最后一行加：@@SNS@@ (内容)
@@ -53,8 +54,15 @@ const GROUP_VIBE_PROMPT = `
 3. 本轮只允许 [GROUP MEMBERS] 里列出的角色发言。不是每个人都必须说话，真实群聊里有人看见但不回也很正常。
 4. 如果用户明确 @ 了某人，被 @ 的角色优先回复；没有 @ 时，让最有反应的人自然开口。
 5. 可以发送语音，消息内容以「[语音] 」开头即可。
-6. 可以发送转账卡片，消息内容单独写成：[转账] 12.5 | 备注
-7. 如果要回复某条历史消息，格式为：@@MSG:角色ID@@@@REPLY:消息ID@@消息内容，消息ID 来自 [CHAT HISTORY] 方括号。
+6. 可以发送转账卡片，消息内容单独写成：[转账] 12.5 | 备注。若要转给群成员，写：[转账给@角色ID] 12.5 | 备注
+7. 可以发送群红包，消息内容单独写成：[红包] 20 x 3 | 留言，表示总金额20美元，3个红包，系统会随机拆分。
+8. 如果要回复某条历史消息，格式为：@@MSG:角色ID@@@@REPLY:消息ID@@消息内容，消息ID 来自 [CHAT HISTORY] 方括号。
+
+【活人说话技巧】
+* 长短句结合：请务必混合使用短促并且符合角色设定的口语（如“真假？”“笑死”"…めんどくせぇ""无语"）和较长的表达句子。绝对禁止网络用语。不要总是输出长度相同的句子，那样像机器人。
+2. 拒绝自说自话：
+   互动性：角色的身份是“在聊天的人”，不是“文章鉴赏家”，更不是"独角戏扮演者"。像活人一般自然互动，合适的地方加入吐槽。
+   可以表达更细腻的情绪，但仍然保持自然。不要把关心写成说教，不要把分析写成报告。
 
 【强力群聊节奏规则】
 1. 绝对不要把群聊写成“轮流发言剧本”。不要平均分配台词，不要每人固定一句或两句。
@@ -88,6 +96,7 @@ let currentChatConfig = {
 let tempStickerFile = null; 
 let chatAbortController = null;
 let pendingReplyTo = null;
+let transferMode = 'transfer';
 
 let longPressTimer;
 let longPressTargetChatId = null;
@@ -452,7 +461,7 @@ function parseAIReplyPrefix(text, chat) {
 
 function splitLongChatText(text) {
     const raw = String(text || '').trim();
-    if (!raw || raw.length <= 52 || raw.startsWith('[语音]') || raw === '[撤回]' || isTransferCommand(raw)) return [raw];
+    if (!raw || raw.length <= 52 || raw.startsWith('[语音]') || raw === '[撤回]' || isTransferCommand(raw) || isRedPacketCommand(raw)) return [raw];
     const chunks = [];
     let buf = "";
     const punctuation = "。！？!?；;，,、…";
@@ -791,6 +800,8 @@ function renderMessages() {
         let bubbleContent = "";
         if (msg.type === 'transfer') {
             bubbleContent = renderTransferCardBody(msg, isMe, msgRole, chatUser);
+        } else if (msg.type === 'redpacket') {
+            bubbleContent = renderRedPacketCardBody(msg, isMe, msgRole, chatUser);
         } else if (msg.type === 'image') {
             const inlineSrc = msg.content && String(msg.content).startsWith('data:image/') ? msg.content : "";
             const placeholder = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
@@ -827,13 +838,13 @@ function renderMessages() {
                     </div>
                 </div>
             `;
-        } else if (msg.type === 'transfer') {
+        } else if (msg.type === 'transfer' || msg.type === 'redpacket') {
             innerHTMLContent = `
                 <div style="display:flex; align-items:flex-end; gap:5px;">
                     ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                     <div>
                         ${chat.type === 'group' && !isMe && msgRole ? `<div class="group-sender-name">${escapeChatHTML(msgRole.name)}</div>` : ''}
-                        <div class="chat-bubble-content transfer-card ${targetClass}">${replyQuoteHTML}${bubbleContent}</div>
+                        <div class="chat-bubble-content ${msg.type === 'redpacket' ? 'redpacket-card' : 'transfer-card'} ${targetClass}">${replyQuoteHTML}${bubbleContent}</div>
                     </div>
                     ${!isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                 </div>
@@ -1020,6 +1031,7 @@ function copyMsg(e) {
         if (chat && chat.messages[targetMsgIndex]) {
             const targetMsg = chat.messages[targetMsgIndex];
             if (targetMsg.type === 'transfer') text = formatTransferText(targetMsg, targetMsg.roleId ? roles.find(r => r.id === targetMsg.roleId) : getChatRole(chat));
+            else if (targetMsg.type === 'redpacket') text = formatRedPacketText(targetMsg);
             else if (targetMsg.type === 'image') text = '[图片]';
             else text = targetMsg.content;
             // 清理可能带有的语音前缀
@@ -1081,7 +1093,7 @@ function replyMsg() {
 function editMsg() {
     const chat = chats.find(c => c.id === currentChatId);
     const msg = chat && chat.messages[targetMsgIndex];
-    if (msg && (msg.type === 'transfer' || msg.type === 'image')) {
+    if (msg && (msg.type === 'transfer' || msg.type === 'redpacket' || msg.type === 'image')) {
         showToast('卡片不可编辑');
         closeFloatingMenu();
         return;
@@ -1161,13 +1173,43 @@ async function handleChatImageUpload(input) {
     }
 }
 function openTransferModal() {
+    const chat = normalizeChat(chats.find(c => c.id === currentChatId));
+    const isGroup = chat && chat.type === 'group';
     document.getElementById('transfer-amount-input').value = "";
+    document.getElementById('redpacket-count-input').value = "";
     document.getElementById('transfer-note-input').value = "";
+    document.getElementById('transfer-mode-row').classList.toggle('hidden', !isGroup);
+    document.getElementById('transfer-target-group').classList.toggle('hidden', !isGroup);
+    if (isGroup) {
+        const select = document.getElementById('transfer-target-select');
+        select.innerHTML = "";
+        getGroupMembers(chat).forEach(role => {
+            const opt = document.createElement('option');
+            opt.value = role.id;
+            opt.innerText = role.name;
+            select.appendChild(opt);
+        });
+    }
+    setTransferMode('transfer');
     document.getElementById('transfer-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('transfer-amount-input').focus(), 50);
 }
 function closeTransferModal() {
     document.getElementById('transfer-modal').classList.add('hidden');
+}
+function setTransferMode(mode) {
+    transferMode = mode === 'redpacket' ? 'redpacket' : 'transfer';
+    const isRed = transferMode === 'redpacket';
+    const chat = normalizeChat(chats.find(c => c.id === currentChatId));
+    const isGroup = chat && chat.type === 'group';
+    document.getElementById('transfer-mode-transfer')?.classList.toggle('active', !isRed);
+    document.getElementById('transfer-mode-redpacket')?.classList.toggle('active', isRed);
+    document.getElementById('transfer-target-group')?.classList.toggle('hidden', !isGroup || isRed);
+    document.getElementById('redpacket-count-group')?.classList.toggle('hidden', !isRed);
+    const amountLabel = document.getElementById('transfer-amount-label');
+    const noteLabel = document.getElementById('transfer-note-label');
+    if (amountLabel) amountLabel.innerText = isRed ? '总金额（USD）' : '金额（USD）';
+    if (noteLabel) noteLabel.innerText = isRed ? '留言（选填）' : '备注（选填）';
 }
 function sendTransferMessage() {
     const amount = Number(document.getElementById('transfer-amount-input').value);
@@ -1176,7 +1218,15 @@ function sendTransferMessage() {
         alert("请填写有效金额");
         return;
     }
-    appendTransferMessage('user', amount, note);
+    const chat = normalizeChat(chats.find(c => c.id === currentChatId));
+    if (chat && chat.type === 'group' && transferMode === 'redpacket') {
+        const count = Math.max(1, Math.floor(Number(document.getElementById('redpacket-count-input').value) || 1));
+        appendRedPacketMessage('user', amount, count, note);
+        closeTransferModal();
+        return;
+    }
+    const targetRoleId = chat && chat.type === 'group' ? document.getElementById('transfer-target-select').value : "";
+    appendTransferMessage('user', amount, note, '', null, targetRoleId);
     closeTransferModal();
 }
 function toggleVoiceText(e, index) {
@@ -1292,6 +1342,8 @@ async function triggerChatGen() {
             content = `[发了一张图片: ${m.desc || '图片'}]`;
         } else if (m.type === 'transfer') {
             content = formatTransferText(m, role);
+        } else if (m.type === 'redpacket') {
+            content = formatRedPacketText(m);
         } else {
             content = m.content;
         }
@@ -1449,6 +1501,7 @@ async function triggerGroupChatGen(chat, btnImg, iconIdle, iconStop) {
         else if (m.type === 'sticker') content = `[发了一个表情包: ${m.desc || '图片'}]`;
         else if (m.type === 'image') content = `[发了一张图片: ${m.desc || '图片'}]`;
         else if (m.type === 'transfer') content = formatTransferText(m, roles.find(r => r.id === m.roleId));
+        else if (m.type === 'redpacket') content = formatRedPacketText(m);
         return `[${m.id}] ${speaker}${getReplyPromptLine(m)}: ${content}`;
     }).join("\n");
 
@@ -1509,9 +1562,12 @@ No matter what language the user uses, all members must reply only in ${replyLan
             const content = contentParts[j];
             if (j > 0) await new Promise(r => setTimeout(r, 600));
             const replyTo = j === 0 ? parsed.replyTo : null;
-            if (isTransferCommand(content)) {
+            if (isRedPacketCommand(content)) {
+                const red = parseRedPacketCommand(content);
+                appendRedPacketMessage('role', red.amount, red.count, red.note, parsed.roleId, replyTo);
+            } else if (isTransferCommand(content)) {
                 const transfer = parseTransferCommand(content);
-                appendTransferMessage('role', transfer.amount, transfer.note, parsed.roleId, replyTo);
+                appendTransferMessage('role', transfer.amount, transfer.note, parsed.roleId, replyTo, transfer.targetRoleId || '');
             } else {
                 appendRoleMessage(parsed.roleId, content, 'text', '', replyTo);
             }
@@ -1528,7 +1584,7 @@ function appendRoleMessage(roleId, content, type = 'text', desc = '', replyTo = 
     renderMessages();
 }
 
-function appendTransferMessage(sender, amount, note = "", roleId = "", replyTo = null) {
+function appendTransferMessage(sender, amount, note = "", roleId = "", replyTo = null, targetRoleId = "") {
     const chat = chats.find(c => c.id === currentChatId);
     if(!chat) return;
     const attachedReply = replyTo || (sender === 'user' && pendingReplyTo ? { ...pendingReplyTo } : null);
@@ -1539,6 +1595,7 @@ function appendTransferMessage(sender, amount, note = "", roleId = "", replyTo =
         type: 'transfer',
         amount: Math.round(Number(amount) * 100) / 100,
         note,
+        targetRoleId,
         currency: 'USD',
         content: `[转账] $${formatTransferAmount(amount)}${note ? ` (${note})` : ''}`,
         replyTo: attachedReply,
@@ -1550,8 +1607,38 @@ function appendTransferMessage(sender, amount, note = "", roleId = "", replyTo =
     renderMessages();
 }
 
+function appendRedPacketMessage(sender, amount, count = 1, note = "", roleId = "", replyTo = null) {
+    const chat = chats.find(c => c.id === currentChatId);
+    if(!chat) return;
+    const attachedReply = replyTo || (sender === 'user' && pendingReplyTo ? { ...pendingReplyTo } : null);
+    const totalCents = Math.max(1, Math.round(Number(amount) * 100));
+    const safeCount = Math.max(1, Math.min(Math.floor(Number(count) || 1), totalCents));
+    const msg = {
+        id: createMsgId(),
+        sender,
+        roleId,
+        type: 'redpacket',
+        totalAmount: Math.round(Number(amount) * 100) / 100,
+        count: safeCount,
+        note,
+        currency: 'USD',
+        claims: [],
+        splits: splitRedPacketAmount(amount, safeCount),
+        content: `[红包] $${formatTransferAmount(amount)} x ${safeCount}${note ? ` (${note})` : ''}`,
+        replyTo: attachedReply,
+        timestamp: Date.now()
+    };
+    chat.messages.push(msg);
+    if (sender === 'user' && pendingReplyTo) cancelChatReply();
+    chat.lastTime = Date.now();
+    saveChatData();
+    renderMessages();
+    if (chat.type === 'group' && sender === 'user') scheduleRoleRedPacketClaims(msg.id);
+}
+
 function renderTransferCardBody(msg, isMe, role, chatUser) {
-    const name = isMe ? (role ? role.name : '对方') : (chatUser ? chatUser.name : '你');
+    const targetRole = msg.targetRoleId ? roles.find(r => r.id === msg.targetRoleId) : null;
+    const name = isMe ? (targetRole || role ? (targetRole || role).name : '对方') : (targetRole ? targetRole.name : (chatUser ? chatUser.name : '你'));
     const label = isMe ? `转账给 ${name}` : `转账给 ${name}`;
     const note = msg.note ? `<div class="transfer-card-note">${escapeChatHTML(msg.note)}</div>` : '';
     return `
@@ -1561,10 +1648,33 @@ function renderTransferCardBody(msg, isMe, role, chatUser) {
     `;
 }
 
+function renderRedPacketCardBody(msg, isMe, role, chatUser) {
+    const senderName = isMe ? (chatUser ? chatUser.name : '你') : (role ? role.name : '对方');
+    const claims = msg.claims || [];
+    const remain = Math.max(0, (msg.count || 0) - claims.length);
+    const claimedByUser = claims.some(c => c.type === 'user');
+    const claimLines = claims.map(c => `<div class="redpacket-claim-line">${escapeChatHTML(c.name)} 领取了 ${escapeChatHTML(senderName)} 的红包：$${formatTransferAmount(c.amount)}</div>`).join('');
+    const canClaim = msg.sender !== 'user' && !claimedByUser && remain > 0;
+    return `
+        <div class="redpacket-head">红包</div>
+        <div class="redpacket-note">${escapeChatHTML(msg.note || '恭喜发财，大吉大利')}</div>
+        <div class="redpacket-meta">$${formatTransferAmount(msg.totalAmount)} USD · ${claims.length}/${msg.count} 已领</div>
+        ${canClaim ? `<button type="button" class="redpacket-claim-btn" onclick="claimRedPacket('${escapeChatHTML(msg.id)}')">领取</button>` : ''}
+        ${claimLines ? `<div class="redpacket-claims">${claimLines}</div>` : ''}
+    `;
+}
+
 function formatTransferText(msg, role) {
-    const direction = msg.sender === 'user' ? `转账给${role ? role.name : '对方'}` : '对方向你转账';
+    const targetRole = msg.targetRoleId ? roles.find(r => r.id === msg.targetRoleId) : null;
+    const direction = msg.sender === 'user' ? `转账给${targetRole ? targetRole.name : (role ? role.name : '对方')}` : `转账给${targetRole ? targetRole.name : '你'}`;
     const note = msg.note ? `，备注：${msg.note}` : '';
     return `[${direction}] $${formatTransferAmount(msg.amount)} USD${note}`;
+}
+
+function formatRedPacketText(msg) {
+    const note = msg.note ? `，留言：${msg.note}` : '';
+    const claimed = (msg.claims || []).length;
+    return `[红包] $${formatTransferAmount(msg.totalAmount)} USD，共${msg.count}个，已领${claimed}个${note}`;
 }
 
 function formatTransferAmount(amount) {
@@ -1573,17 +1683,81 @@ function formatTransferAmount(amount) {
 }
 
 function isTransferCommand(text) {
-    return /^\[转账\]\s*\d+(\.\d+)?/i.test(String(text || '').trim());
+    return /^\[转账(?:给@?[^\]]+)?\]\s*\$?\s*\d+(\.\d+)?/i.test(String(text || '').trim());
 }
 
 function parseTransferCommand(text) {
     const raw = String(text || '').trim();
-    const match = raw.match(/^\[转账\]\s*(\$?\s*)?(\d+(?:\.\d+)?)(?:\s*(?:USD|美元))?\s*(?:[|｜]\s*(.*))?$/i);
+    const match = raw.match(/^\[转账(?:给(@?[^\]]+))?\]\s*(\$?\s*)?(\d+(?:\.\d+)?)(?:\s*(?:USD|美元))?\s*(?:[|｜]\s*(.*))?$/i);
     if (!match) return { amount: 0, note: '' };
+    let targetRoleId = (match[1] || '').trim();
+    if (targetRoleId && !targetRoleId.startsWith('@')) targetRoleId = '@' + targetRoleId;
+    return {
+        targetRoleId,
+        amount: Number(match[3]),
+        note: (match[4] || '').trim()
+    };
+}
+
+function isRedPacketCommand(text) {
+    return /^\[红包\]\s*\$?\s*\d+(\.\d+)?/i.test(String(text || '').trim());
+}
+
+function parseRedPacketCommand(text) {
+    const raw = String(text || '').trim();
+    const match = raw.match(/^\[红包\]\s*(\$?\s*)?(\d+(?:\.\d+)?)(?:\s*(?:USD|美元))?\s*(?:x|×|\*)\s*(\d+)\s*(?:[|｜]\s*(.*))?$/i);
+    if (!match) return { amount: 0, count: 1, note: '' };
     return {
         amount: Number(match[2]),
-        note: (match[3] || '').trim()
+        count: Math.max(1, Math.floor(Number(match[3]) || 1)),
+        note: (match[4] || '').trim()
     };
+}
+
+function splitRedPacketAmount(total, count) {
+    const totalCents = Math.max(1, Math.round(Number(total) * 100));
+    const safeCount = Math.max(1, Math.min(Math.floor(count || 1), totalCents));
+    const cuts = [];
+    for (let i = 0; i < safeCount - 1; i++) cuts.push(Math.floor(Math.random() * (totalCents - 1)) + 1);
+    cuts.sort((a, b) => a - b);
+    const points = [0, ...cuts, totalCents];
+    return points.slice(1).map((p, i) => Math.max(1, p - points[i]) / 100);
+}
+
+function claimRedPacket(msgId, claimerRoleId = '', chatId = currentChatId) {
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat) return;
+    const msg = chat.messages.find(m => m.id === msgId && m.type === 'redpacket');
+    if (!msg || (msg.claims || []).length >= msg.count) return;
+    if (!Array.isArray(msg.claims)) msg.claims = [];
+    if (!Array.isArray(msg.splits) || msg.splits.length === 0) msg.splits = splitRedPacketAmount(msg.totalAmount, msg.count);
+    const type = claimerRoleId ? 'role' : 'user';
+    if (msg.claims.some(c => c.type === type && (!claimerRoleId || c.roleId === claimerRoleId))) return;
+    const role = claimerRoleId ? roles.find(r => r.id === claimerRoleId) : null;
+    const chatUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
+    const amount = msg.splits[msg.claims.length] || 0.01;
+    msg.claims.push({
+        type,
+        roleId: claimerRoleId,
+        name: role ? role.name : (chatUser ? chatUser.name : '你'),
+        amount,
+        timestamp: Date.now()
+    });
+    saveChatData();
+    renderMessages();
+}
+
+function scheduleRoleRedPacketClaims(msgId) {
+    const chat = chats.find(c => c.id === currentChatId);
+    if (!chat || chat.type !== 'group') return;
+    const msg = chat.messages.find(m => m.id === msgId && m.type === 'redpacket');
+    if (!msg) return;
+    const candidates = getGroupMembers(chat).filter(r => r.id !== msg.roleId).sort(() => Math.random() - 0.5);
+    const claimCount = Math.min(msg.count, candidates.length, Math.max(1, Math.floor(Math.random() * Math.min(3, msg.count)) + 1));
+    const chatId = chat.id;
+    candidates.slice(0, claimCount).forEach((role, idx) => {
+        setTimeout(() => claimRedPacket(msgId, role.id, chatId), 900 + idx * 1200 + Math.random() * 800);
+    });
 }
 
 function parseGroupAIMessage(text, chat) {

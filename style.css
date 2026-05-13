@@ -1076,6 +1076,80 @@ input, textarea, select {
     opacity: 0.7;
     margin-left: 4px;
 }
+.transfer-mode-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 12px;
+    background: #f0f2f5;
+    border-radius: 8px;
+    padding: 4px;
+}
+.transfer-mode-btn {
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #66708a;
+    padding: 8px 0;
+    font-weight: bold;
+    cursor: pointer;
+}
+.transfer-mode-btn.active {
+    background: #fff;
+    color: var(--nav-bg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.redpacket-card,
+.right .redpacket-card {
+    min-width: 190px;
+    max-width: 70vw;
+    border-radius: 12px;
+    padding: 12px 13px;
+    border: 1px solid #d6a36e;
+    background: linear-gradient(180deg, #d96f46, #b94a34);
+    color: #fff8e8;
+}
+.left .redpacket-card {
+    background: linear-gradient(180deg, #d9854d, #bd5b3a);
+    border-color: #e0b27a;
+}
+.redpacket-head {
+    font-size: 1.05rem;
+    font-weight: bold;
+    letter-spacing: 0;
+}
+.redpacket-note {
+    margin-top: 6px;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    word-break: break-word;
+}
+.redpacket-meta {
+    margin-top: 8px;
+    font-size: 0.75rem;
+    color: rgba(255,248,232,0.78);
+}
+.redpacket-claim-btn {
+    margin-top: 10px;
+    width: 100%;
+    border: none;
+    border-radius: 7px;
+    padding: 8px 0;
+    background: #ffe5a8;
+    color: #8e3e26;
+    font-weight: bold;
+    cursor: pointer;
+}
+.redpacket-claims {
+    margin-top: 9px;
+    border-top: 1px solid rgba(255,255,255,0.2);
+    padding-top: 7px;
+}
+.redpacket-claim-line {
+    font-size: 0.72rem;
+    color: rgba(255,248,232,0.84);
+    line-height: 1.4;
+}
 .group-create-role-list,
 .mention-role-list,
 .group-member-list {
