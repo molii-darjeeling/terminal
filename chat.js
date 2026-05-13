@@ -55,9 +55,10 @@ const GROUP_VIBE_PROMPT = `
 4. 如果用户明确 @ 了某人，被 @ 的角色优先回复；没有 @ 时，让最有反应的人自然开口。
 5. 可以发送语音，消息内容以「[语音] 」开头即可。
 6. 可以发送转账卡片，消息内容单独写成：[转账] 12.5 | 备注。若要转给群成员，写：[转账给@角色ID] 12.5 | 备注
-7. 可以发送群红包，消息内容单独写成：[红包] 20 x 3 | 留言，表示总金额20美元，3个红包，系统会随机拆分。
-8. 如果想实际领取还剩余的红包，消息内容单独写成：[领红包]。系统会让该角色领取最新一个未领完、且自己没领过的红包。
-9. 如果要回复某条历史消息，格式为：@@MSG:角色ID@@@@REPLY:消息ID@@消息内容，消息ID 来自 [CHAT HISTORY] 方括号。
+7. 如果想接收用户转给自己的转账，消息内容单独写成：[接收转账]。系统会渲染成由该角色发出的“已接收转账”卡片。
+8. 可以发送群红包，消息内容单独写成：[红包] 20 x 3 | 留言，表示总金额20美元，3个红包，系统会随机拆分。
+9. 如果想实际领取还剩余的红包，消息内容单独写成：[领红包]。系统会让该角色领取最新一个未领完、且自己没领过的红包。
+10. 如果要回复某条历史消息，格式为：@@MSG:角色ID@@@@REPLY:消息ID@@消息内容，消息ID 来自 [CHAT HISTORY] 方括号。
 
 【活人说话技巧】
 * 长短句结合：请务必混合使用短促并且符合角色设定的口语（如“真假？”“笑死”"…めんどくせぇ""无语"“发生什么啦？"）和较长的表达句子。绝对禁止网络用语。不要总是输出长度相同的句子，那样像机器人。
@@ -371,6 +372,7 @@ function getMessagePreviewText(msg, chat) {
     else if (msg.type === 'sticker') text = "[表情包]";
     else if (msg.type === 'image') text = "[图片]";
     else if (msg.type === 'transfer') text = formatTransferText(msg, msg.roleId ? roles.find(r => r.id === msg.roleId) : getChatRole(chat));
+    else if (msg.type === 'transferReceipt') text = formatTransferReceiptText(msg);
     else text = msg.content || "";
     text = String(text).replace(/^\[语音\]\s*/, "[语音] ").replace(/\s+/g, " ").trim();
     return text.length > 42 ? text.slice(0, 42) + "..." : text;
@@ -469,7 +471,7 @@ function parseAIReplyPrefix(text, chat) {
 
 function splitLongChatText(text) {
     const raw = String(text || '').trim();
-    if (!raw || raw.length <= 52 || raw.startsWith('[语音]') || raw === '[撤回]' || isTransferCommand(raw) || isRedPacketCommand(raw)) return [raw];
+    if (!raw || raw.length <= 52 || raw.startsWith('[语音]') || raw === '[撤回]' || isTransferCommand(raw) || isTransferReceiptCommand(raw) || isRedPacketCommand(raw)) return [raw];
     const chunks = [];
     let buf = "";
     const punctuation = "。！？!?；;，,、…";
@@ -563,6 +565,7 @@ function renderChatList() {
         if (lastMsg.isRecalled) previewText = '[撤回了一条消息]';
         else if (previewText.startsWith('[语音]')) previewText = '[语音]';
         else if (lastMsg.type === 'transfer') previewText = '[转账]';
+        else if (lastMsg.type === 'transferReceipt') previewText = '[已接收转账]';
 
         if(previewText.length > 20) previewText = previewText.substring(0, 20) + "...";
         const title = chat.type === 'group' ? (chat.name || buildGroupName(chat.memberRoleIds)) : role.name;
@@ -808,6 +811,8 @@ function renderMessages() {
         let bubbleContent = "";
         if (msg.type === 'transfer') {
             bubbleContent = renderTransferCardBody(msg, isMe, msgRole, chatUser);
+        } else if (msg.type === 'transferReceipt') {
+            bubbleContent = renderTransferReceiptCardBody(msg, isMe, msgRole, chatUser);
         } else if (msg.type === 'redpacket') {
             bubbleContent = renderRedPacketCardBody(msg, isMe, msgRole, chatUser);
         } else if (msg.type === 'image') {
@@ -846,15 +851,16 @@ function renderMessages() {
                     </div>
                 </div>
             `;
-        } else if (msg.type === 'transfer' || msg.type === 'redpacket') {
+        } else if (msg.type === 'transfer' || msg.type === 'transferReceipt' || msg.type === 'redpacket') {
             const canReceiveTransfer = msg.type === 'transfer' && canUserReceiveTransfer(msg, chat);
             const cardClickAttr = canReceiveTransfer ? ` onclick="openTransferReceiveModal(event, '${escapeChatHTML(msg.id)}')"` : '';
+            const cardClass = msg.type === 'redpacket' ? 'redpacket-card' : (msg.type === 'transferReceipt' ? 'transfer-receipt-card' : 'transfer-card');
             innerHTMLContent = `
                 <div style="display:flex; align-items:flex-end; gap:5px;">
                     ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                     <div>
                         ${chat.type === 'group' && !isMe && msgRole ? `<div class="group-sender-name">${escapeChatHTML(msgRole.name)}</div>` : ''}
-                        <div class="chat-bubble-content ${msg.type === 'redpacket' ? 'redpacket-card' : 'transfer-card'} ${canReceiveTransfer ? 'transfer-card-receivable' : ''} ${targetClass}"${cardClickAttr}>${replyQuoteHTML}${bubbleContent}</div>
+                        <div class="chat-bubble-content ${cardClass} ${canReceiveTransfer ? 'transfer-card-receivable' : ''} ${targetClass}"${cardClickAttr}>${replyQuoteHTML}${bubbleContent}</div>
                     </div>
                     ${!isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                 </div>
@@ -1041,6 +1047,7 @@ function copyMsg(e) {
         if (chat && chat.messages[targetMsgIndex]) {
             const targetMsg = chat.messages[targetMsgIndex];
             if (targetMsg.type === 'transfer') text = formatTransferText(targetMsg, targetMsg.roleId ? roles.find(r => r.id === targetMsg.roleId) : getChatRole(chat));
+            else if (targetMsg.type === 'transferReceipt') text = formatTransferReceiptText(targetMsg);
             else if (targetMsg.type === 'redpacket') text = formatRedPacketText(targetMsg);
             else if (targetMsg.type === 'image') text = '[图片]';
             else text = targetMsg.content;
@@ -1103,7 +1110,7 @@ function replyMsg() {
 function editMsg() {
     const chat = chats.find(c => c.id === currentChatId);
     const msg = chat && chat.messages[targetMsgIndex];
-    if (msg && (msg.type === 'transfer' || msg.type === 'redpacket' || msg.type === 'image')) {
+    if (msg && (msg.type === 'transfer' || msg.type === 'transferReceipt' || msg.type === 'redpacket' || msg.type === 'image')) {
         showToast('卡片不可编辑');
         closeFloatingMenu();
         return;
@@ -1239,6 +1246,7 @@ function confirmReceiveTransfer() {
         msg.accepted = true;
         msg.acceptedAt = Date.now();
         msg.acceptedBy = 'user';
+        appendTransferReceiptMessage('user', msg);
         saveChatData();
         renderMessages();
         showToast('已接收转账');
@@ -1391,6 +1399,8 @@ async function triggerChatGen() {
             content = `[发了一张图片: ${m.desc || '图片'}]`;
         } else if (m.type === 'transfer') {
             content = formatTransferText(m, role);
+        } else if (m.type === 'transferReceipt') {
+            content = formatTransferReceiptText(m);
         } else if (m.type === 'redpacket') {
             content = formatRedPacketText(m, true);
         } else {
@@ -1430,6 +1440,8 @@ async function triggerChatGen() {
     This chat supports decorative USD transfers. The user can transfer money to you, and you may also transfer money to the user for fun.
     If you want to send a transfer card, output one separate message exactly like this:
     [转账] 12.5 | coffee
+    If you want to accept the latest transfer from the user, output one separate message exactly like this:
+    [接收转账]
     The amount is USD. The note after | is optional. Do not calculate balances.
     `;
     
@@ -1487,6 +1499,8 @@ async function triggerChatGen() {
                 } else if (isTransferCommand(part)) {
                      const transfer = parseTransferCommand(part);
                      appendTransferMessage('role', transfer.amount, transfer.note, role ? role.id : '', msgParts[i].replyTo);
+                } else if (isTransferReceiptCommand(part)) {
+                     appendLatestTransferReceiptForRole(role ? role.id : '', msgParts[i].replyTo);
                 } else {
                      appendMessage('role', part, 'text', '', msgParts[i].replyTo);
                 }
@@ -1550,6 +1564,7 @@ async function triggerGroupChatGen(chat, btnImg, iconIdle, iconStop) {
         else if (m.type === 'sticker') content = `[发了一个表情包: ${m.desc || '图片'}]`;
         else if (m.type === 'image') content = `[发了一张图片: ${m.desc || '图片'}]`;
         else if (m.type === 'transfer') content = formatTransferText(m, roles.find(r => r.id === m.roleId));
+        else if (m.type === 'transferReceipt') content = formatTransferReceiptText(m);
         else if (m.type === 'redpacket') content = formatRedPacketText(m, true);
         return `[${m.id}] ${speaker}${getReplyPromptLine(m)}: ${content}`;
     }).join("\n");
@@ -1619,6 +1634,8 @@ No matter what language the user uses, all members must reply only in ${replyLan
             } else if (isTransferCommand(content)) {
                 const transfer = parseTransferCommand(content);
                 appendTransferMessage('role', transfer.amount, transfer.note, parsed.roleId, replyTo, transfer.targetRoleId || '');
+            } else if (isTransferReceiptCommand(content)) {
+                appendLatestTransferReceiptForRole(parsed.roleId, replyTo, chat.id);
             } else {
                 appendRoleMessage(parsed.roleId, content, 'text', '', replyTo);
             }
@@ -1656,6 +1673,44 @@ function appendTransferMessage(sender, amount, note = "", roleId = "", replyTo =
     chat.lastTime = Date.now();
     saveChatData();
     renderMessages();
+}
+
+function appendTransferReceiptMessage(sender, sourceMsg, roleId = "", replyTo = null, chatId = currentChatId) {
+    const chat = chats.find(c => c.id === chatId);
+    if(!chat || !sourceMsg) return false;
+    const receipt = {
+        id: createMsgId(),
+        sender,
+        roleId,
+        type: 'transferReceipt',
+        amount: Math.round(Number(sourceMsg.amount) * 100) / 100,
+        note: sourceMsg.note || '',
+        currency: sourceMsg.currency || 'USD',
+        transferMsgId: sourceMsg.id || '',
+        content: `[已接收转账] $${formatTransferAmount(sourceMsg.amount)}${sourceMsg.note ? ` (${sourceMsg.note})` : ''}`,
+        replyTo,
+        timestamp: Date.now()
+    };
+    chat.messages.push(receipt);
+    chat.lastTime = Date.now();
+    saveChatData();
+    renderMessages();
+    return true;
+}
+
+function appendLatestTransferReceiptForRole(roleId, replyTo = null, chatId = currentChatId) {
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat || !roleId) return false;
+    const msg = [...(chat.messages || [])].reverse().find(m => {
+        if (m.type !== 'transfer' || m.sender !== 'user' || m.accepted) return false;
+        if (chat.type === 'group') return m.targetRoleId === roleId;
+        return true;
+    });
+    if (!msg) return false;
+    msg.accepted = true;
+    msg.acceptedAt = Date.now();
+    msg.acceptedBy = roleId;
+    return appendTransferReceiptMessage('role', msg, roleId, replyTo, chatId);
 }
 
 function appendRedPacketMessage(sender, amount, count = 1, note = "", roleId = "", replyTo = null) {
@@ -1701,6 +1756,16 @@ function renderTransferCardBody(msg, isMe, role, chatUser) {
     `;
 }
 
+function renderTransferReceiptCardBody(msg, isMe, role, chatUser) {
+    const receiverName = isMe ? (chatUser ? chatUser.name : '你') : (role ? role.name : '对方');
+    const note = msg.note ? `<div class="transfer-card-note">${escapeChatHTML(msg.note)}</div>` : '';
+    return `
+        <div class="transfer-receipt-label">${escapeChatHTML(receiverName)} 已接收转账</div>
+        <div class="transfer-receipt-amount">$${formatTransferAmount(msg.amount)}<span class="transfer-card-currency">USD</span></div>
+        ${note}
+    `;
+}
+
 function canUserReceiveTransfer(msg, chat) {
     if (!msg || msg.type !== 'transfer' || msg.sender === 'user' || msg.accepted) return false;
     if (chat && chat.type === 'group' && msg.targetRoleId) return false;
@@ -1737,6 +1802,11 @@ function formatTransferText(msg, role) {
     return `[${direction}] $${formatTransferAmount(msg.amount)} USD${note}${status}`;
 }
 
+function formatTransferReceiptText(msg) {
+    const note = msg.note ? `，备注：${msg.note}` : '';
+    return `[已接收转账] $${formatTransferAmount(msg.amount)} USD${note}`;
+}
+
 function formatRedPacketText(msg, forAI = false) {
     const note = msg.note ? `，留言：${msg.note}` : '';
     const claims = msg.claims || [];
@@ -1762,6 +1832,10 @@ function formatTransferAmount(amount) {
 
 function isTransferCommand(text) {
     return /^\[转账(?:给@?[^\]]+)?\]\s*\$?\s*\d+(\.\d+)?/i.test(String(text || '').trim());
+}
+
+function isTransferReceiptCommand(text) {
+    return /^\[(?:接收转账|已接收转账)\]/i.test(String(text || '').trim());
 }
 
 function parseTransferCommand(text) {

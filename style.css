@@ -531,12 +531,13 @@ input, textarea, select {
 .chat-list-group-btn {
     width: 32px;
     height: 32px;
-    border: 1px solid rgba(255,255,255,0.32);
+    border: 1px solid rgba(255,255,255,0.34);
     border-radius: 8px;
-    background: rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.14);
     position: relative;
     cursor: pointer;
     flex-shrink: 0;
+    overflow: hidden;
 }
 .chat-list-group-btn:active {
     transform: scale(0.96);
@@ -544,39 +545,42 @@ input, textarea, select {
 }
 .group-icon-person {
     position: absolute;
-    width: 14px;
-    height: 14px;
-    border: 2px solid #fff;
+    width: 11px;
+    height: 11px;
+    background: #eef2ff;
     border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(34,49,94,0.9);
 }
 .group-icon-person::after {
     content: "";
     position: absolute;
     left: 50%;
-    top: 11px;
-    width: 18px;
-    height: 9px;
-    border: 2px solid #fff;
-    border-top-left-radius: 12px;
-    border-top-right-radius: 12px;
-    border-bottom: none;
+    top: 10px;
+    width: 19px;
+    height: 13px;
+    background: #eef2ff;
+    border-radius: 12px 12px 4px 4px;
+    box-shadow: 0 0 0 2px rgba(34,49,94,0.9);
     transform: translateX(-50%);
 }
 .group-icon-person-main {
-    left: 6px;
-    top: 5px;
+    right: 6px;
+    top: 7px;
+    z-index: 1;
 }
 .group-icon-person-side {
-    right: 5px;
-    top: 8px;
-    width: 11px;
-    height: 11px;
-    opacity: 0.78;
+    left: 7px;
+    top: 5px;
+    width: 10px;
+    height: 10px;
+    background: #9fb0d6;
+    z-index: 2;
 }
 .group-icon-person-side::after {
     top: 9px;
-    width: 15px;
-    height: 7px;
+    width: 17px;
+    height: 12px;
+    background: #9fb0d6;
 }
 
 /* 2. Chat Room Container */
@@ -1144,6 +1148,31 @@ input, textarea, select {
 }
 .transfer-card-receivable .transfer-card-status {
     color: #456a96;
+}
+.transfer-receipt-card,
+.right .transfer-receipt-card {
+    min-width: 168px;
+    max-width: 68vw;
+    border-radius: 12px;
+    padding: 11px 13px;
+    border: 1px solid #b9c8d9;
+    background: linear-gradient(180deg, #eef5fb, #dbe7f1);
+    color: #283e59;
+}
+.left .transfer-receipt-card {
+    background: linear-gradient(180deg, #f3efe8, #e7ddcf);
+    border-color: #d2c2ad;
+    color: #4e3a28;
+}
+.transfer-receipt-label {
+    font-size: 0.8rem;
+    font-weight: bold;
+    opacity: 0.78;
+}
+.transfer-receipt-amount {
+    margin-top: 5px;
+    font-size: 1.18rem;
+    font-weight: bold;
 }
 .transfer-receive-box {
     max-width: 330px;
