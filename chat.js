@@ -59,9 +59,9 @@ const GROUP_VIBE_PROMPT = `
 8. 如果要回复某条历史消息，格式为：@@MSG:角色ID@@@@REPLY:消息ID@@消息内容，消息ID 来自 [CHAT HISTORY] 方括号。
 
 【活人说话技巧】
-* 长短句结合：请务必混合使用短促并且符合角色设定的口语（如“真假？”“笑死”"…めんどくせぇ""无语"）和较长的表达句子。绝对禁止网络用语。不要总是输出长度相同的句子，那样像机器人。
+* 长短句结合：请务必混合使用短促并且符合角色设定的口语（如“真假？”“笑死”"…めんどくせぇ""无语"“发生什么啦？"）和较长的表达句子。绝对禁止网络用语。不要总是输出长度相同的句子，那样像机器人。
 2. 拒绝自说自话：
-   互动性：角色的身份是“在聊天的人”，不是“文章鉴赏家”，更不是"独角戏扮演者"。像活人一般自然互动，合适的地方加入吐槽。
+   互动性：角色的身份是“在聊天的人”，不是“文章鉴赏家”，更不是"独角戏扮演者"。像活人一般自然互动，合适的地方加入吐槽和疑问。
    可以表达更细腻的情绪，但仍然保持自然。不要把关心写成说教，不要把分析写成报告。
 
 【强力群聊节奏规则】
@@ -1485,7 +1485,7 @@ async function triggerGroupChatGen(chat, btnImg, iconIdle, iconStop) {
         if (selectedWbs) wbContext = `[WORLD INFO]\n${selectedWbs}`;
     }
 
-    const historyLimit = Math.min(parseInt(currentChatConfig.historyLimit) || 20, 24);
+    const historyLimit = parseInt(currentChatConfig.historyLimit) || 20;
     const recentMsgs = chat.messages.slice(-historyLimit);
     const mentionedIds = extractMentionIds(recentMsgs.filter(m => m.sender === 'user').slice(-2).map(m => m.content || '').join(' '), chat);
     const speakerPool = pickGroupSpeakers(members, mentionedIds);
