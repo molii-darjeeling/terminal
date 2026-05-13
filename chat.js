@@ -56,7 +56,8 @@ const GROUP_VIBE_PROMPT = `
 5. 可以发送语音，消息内容以「[语音] 」开头即可。
 6. 可以发送转账卡片，消息内容单独写成：[转账] 12.5 | 备注。若要转给群成员，写：[转账给@角色ID] 12.5 | 备注
 7. 可以发送群红包，消息内容单独写成：[红包] 20 x 3 | 留言，表示总金额20美元，3个红包，系统会随机拆分。
-8. 如果要回复某条历史消息，格式为：@@MSG:角色ID@@@@REPLY:消息ID@@消息内容，消息ID 来自 [CHAT HISTORY] 方括号。
+8. 如果想实际领取还剩余的红包，消息内容单独写成：[领红包]。系统会让该角色领取最新一个未领完、且自己没领过的红包。
+9. 如果要回复某条历史消息，格式为：@@MSG:角色ID@@@@REPLY:消息ID@@消息内容，消息ID 来自 [CHAT HISTORY] 方括号。
 
 【活人说话技巧】
 * 长短句结合：请务必混合使用短促并且符合角色设定的口语（如“真假？”“笑死”"…めんどくせぇ""无语"“发生什么啦？"）和较长的表达句子。绝对禁止网络用语。不要总是输出长度相同的句子，那样像机器人。
@@ -76,6 +77,7 @@ const GROUP_VIBE_PROMPT = `
 - [CHAT HISTORY] 会写明红包的领取记录，例如“某人领到$1（1/3，剩2个）”。只有领取记录里出现了自己名字的角色，才可以说“我抢到了/我领到了/谢谢红包”。
 - 没有出现在领取记录里的角色，绝对不能假装自己抢到了红包；只能说“没抢到”“还有吗”“手慢了”等。
 - 发送 [红包] 指令只是发红包，不等于自己领取红包。
+- 如果你想让角色后续真的领走剩余红包，必须先单独输出 [领红包]，不要只在自然语言里说“我领了”。
 `;
 
 // --- Global Chat State ---
@@ -1567,7 +1569,9 @@ No matter what language the user uses, all members must reply only in ${replyLan
             const content = contentParts[j];
             if (j > 0) await new Promise(r => setTimeout(r, 600));
             const replyTo = j === 0 ? parsed.replyTo : null;
-            if (isRedPacketCommand(content)) {
+            if (isRedPacketClaimCommand(content)) {
+                claimLatestRedPacketForRole(parsed.roleId, chat.id);
+            } else if (isRedPacketCommand(content)) {
                 const red = parseRedPacketCommand(content);
                 appendRedPacketMessage('role', red.amount, red.count, red.note, parsed.roleId, replyTo);
             } else if (isTransferCommand(content)) {
@@ -1720,6 +1724,10 @@ function isRedPacketCommand(text) {
     return /^\[红包\]\s*\$?\s*\d+(\.\d+)?/i.test(String(text || '').trim());
 }
 
+function isRedPacketClaimCommand(text) {
+    return /^\[领红包\]$/i.test(String(text || '').trim());
+}
+
 function parseRedPacketCommand(text) {
     const raw = String(text || '').trim();
     const match = raw.match(/^\[红包\]\s*(\$?\s*)?(\d+(?:\.\d+)?)(?:\s*(?:USD|美元))?\s*(?:x|×|\*)\s*(\d+)\s*(?:[|｜]\s*(.*))?$/i);
@@ -1762,6 +1770,20 @@ function claimRedPacket(msgId, claimerRoleId = '', chatId = currentChatId) {
     });
     saveChatData();
     renderMessages();
+}
+
+function claimLatestRedPacketForRole(roleId, chatId = currentChatId) {
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat || !roleId) return false;
+    const msg = [...(chat.messages || [])].reverse().find(m => {
+        if (m.type !== 'redpacket') return false;
+        const claims = m.claims || [];
+        if (claims.length >= m.count) return false;
+        return !claims.some(c => c.type === 'role' && c.roleId === roleId);
+    });
+    if (!msg) return false;
+    claimRedPacket(msg.id, roleId, chatId);
+    return true;
 }
 
 function scheduleRoleRedPacketClaims(msgId) {
