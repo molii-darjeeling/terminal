@@ -179,16 +179,18 @@ function loadAllData() {
     document.getElementById('model-name').value = config.model;
 }
 
-function clearAllData() {
+async function clearAllData() {
     if(confirm("确定要清空所有数据吗？此操作无法撤销。")) {
         localStorage.clear();
+        if (typeof clearChatImageDB === 'function') await clearChatImageDB();
         location.reload();
     }
 }
 
-function exportData() {
+async function exportData() {
     // Update current profile before export
     userProfiles[currentProfileIndex] = user;
+    if (typeof saveChatData === 'function') saveChatData();
     
     const data = {
         config: localStorage.getItem('helios_config'),
@@ -198,6 +200,12 @@ function exportData() {
         posts: localStorage.getItem('helios_posts'),
         global_worldbooks: JSON.stringify(globalWorldBooks) // [修改 1] 导出包含世界书
     };
+    if (typeof buildChatBackupPayload === 'function') {
+        Object.assign(data, await buildChatBackupPayload());
+    } else {
+        data.chats = localStorage.getItem('helios_chats');
+        data.stickers = localStorage.getItem('helios_stickers');
+    }
     const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -211,7 +219,7 @@ function importData(input) {
     const file = input.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
             
@@ -275,8 +283,14 @@ function importData(input) {
             // 4. 恢复其他数据
             if (data.roles) localStorage.setItem('helios_roles', data.roles);
             if (data.posts) localStorage.setItem('helios_posts', data.posts);
+            if (typeof restoreChatBackupPayload === 'function') {
+                await restoreChatBackupPayload(data);
+            } else {
+                if (data.chats) localStorage.setItem('helios_chats', typeof data.chats === 'string' ? data.chats : JSON.stringify(data.chats));
+                if (data.stickers) localStorage.setItem('helios_stickers', typeof data.stickers === 'string' ? data.stickers : JSON.stringify(data.stickers));
+            }
             
-            alert("导入成功，世界书已自动迁移到全局设置，页面即将刷新");
+            alert("导入成功，数据已恢复，页面即将刷新");
             location.reload();
         } catch (err) {
             alert("文件格式错误，无法读取");

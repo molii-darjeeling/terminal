@@ -542,6 +542,9 @@ input, textarea, select {
 .chat-sticker-img { max-width: 120px; border-radius: 8px; display: block; }
 .chat-image-msg {
     display: block;
+    min-width: 120px;
+    min-height: 90px;
+    background: rgba(255,255,255,0.45);
     max-width: 210px;
     max-height: 240px;
     border-radius: 10px;

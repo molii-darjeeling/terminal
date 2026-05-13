@@ -103,6 +103,10 @@ let longPressTimer;
 let longPressTargetChatId = null;
 window.globalLongPressActive = false; // 用于防范展开语音和长按唤出菜单的冲突
 
+const CHAT_IMAGE_DB_NAME = "helios_chat_media";
+const CHAT_IMAGE_STORE = "images";
+let chatImageDbPromise = null;
+
 // 监听全局点击：点击空白处关闭悬浮菜单
 document.addEventListener('click', (e) => {
     if (window.justOpenedMenu) {
@@ -129,6 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     loadChatData();
+    migrateChatImagesToIndexedDB();
     const sendBtn = document.querySelector('.send-btn');
     if(sendBtn) {
         sendBtn.addEventListener('touchstart', (e) => { e.preventDefault(); sendUserMessage(); });
@@ -150,8 +155,147 @@ function loadChatData() {
 }
 
 function saveChatData() {
-    localStorage.setItem('helios_chats', JSON.stringify(chats));
-    localStorage.setItem('helios_stickers', JSON.stringify(stickers));
+    try {
+        localStorage.setItem('helios_chats', JSON.stringify(chats));
+        localStorage.setItem('helios_stickers', JSON.stringify(stickers));
+        return true;
+    } catch (err) {
+        console.error('保存聊天数据失败，可能是本地存储空间不足', err);
+        if (typeof showToast === 'function') showToast('本地存储空间不足，图片可能无法永久保存');
+        return false;
+    }
+}
+
+function openChatImageDB() {
+    if (chatImageDbPromise) return chatImageDbPromise;
+    chatImageDbPromise = new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+            reject(new Error("IndexedDB not supported"));
+            return;
+        }
+        const req = indexedDB.open(CHAT_IMAGE_DB_NAME, 1);
+        req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(CHAT_IMAGE_STORE)) db.createObjectStore(CHAT_IMAGE_STORE, { keyPath: "id" });
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+    return chatImageDbPromise;
+}
+
+async function saveChatImageData(dataUrl, id = null) {
+    const imageId = id || "img_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+    const db = await openChatImageDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(CHAT_IMAGE_STORE, "readwrite");
+        tx.objectStore(CHAT_IMAGE_STORE).put({ id: imageId, dataUrl, updatedAt: Date.now() });
+        tx.oncomplete = () => resolve(imageId);
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+async function getChatImageData(imageId) {
+    if (!imageId) return "";
+    try {
+        const db = await openChatImageDB();
+        return await new Promise((resolve, reject) => {
+            const req = db.transaction(CHAT_IMAGE_STORE, "readonly").objectStore(CHAT_IMAGE_STORE).get(imageId);
+            req.onsuccess = () => resolve(req.result ? req.result.dataUrl : "");
+            req.onerror = () => reject(req.error);
+        });
+    } catch (err) {
+        console.error("读取聊天图片失败", err);
+        return "";
+    }
+}
+
+async function deleteChatImageData(imageId) {
+    if (!imageId) return;
+    try {
+        const db = await openChatImageDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(CHAT_IMAGE_STORE, "readwrite");
+            tx.objectStore(CHAT_IMAGE_STORE).delete(imageId);
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (err) {
+        console.error("删除聊天图片失败", err);
+    }
+}
+
+async function clearChatImageDB() {
+    try {
+        const db = await openChatImageDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(CHAT_IMAGE_STORE, "readwrite");
+            tx.objectStore(CHAT_IMAGE_STORE).clear();
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (err) {
+        console.error("清空聊天图片仓库失败", err);
+    }
+}
+
+async function buildChatBackupPayload() {
+    const chatClone = JSON.parse(JSON.stringify(chats || []));
+    for (const chat of chatClone) {
+        for (const msg of (chat.messages || [])) {
+            if (msg.type !== 'image') continue;
+            const dataUrl = msg.content && String(msg.content).startsWith('data:image/')
+                ? msg.content
+                : await getChatImageData(msg.imageId);
+            if (dataUrl) msg.imageData = dataUrl;
+            msg.content = "";
+        }
+    }
+    return {
+        chats: JSON.stringify(chatClone),
+        stickers: JSON.stringify(stickers || [])
+    };
+}
+
+async function restoreChatBackupPayload(data) {
+    if (!data) return;
+    if (data.chats) {
+        const importedChats = typeof data.chats === 'string' ? JSON.parse(data.chats) : data.chats;
+        for (const chat of importedChats) {
+            for (const msg of (chat.messages || [])) {
+                if (msg.type !== 'image') continue;
+                const imageData = msg.imageData || (msg.content && String(msg.content).startsWith('data:image/') ? msg.content : "");
+                if (imageData) {
+                    msg.imageId = await saveChatImageData(imageData, msg.imageId);
+                    msg.content = "";
+                }
+                delete msg.imageData;
+            }
+        }
+        localStorage.setItem('helios_chats', JSON.stringify(importedChats));
+    }
+    if (data.stickers) {
+        localStorage.setItem('helios_stickers', typeof data.stickers === 'string' ? data.stickers : JSON.stringify(data.stickers));
+    }
+}
+
+async function migrateChatImagesToIndexedDB() {
+    let changed = false;
+    for (const chat of chats) {
+        for (const msg of (chat.messages || [])) {
+            if (msg.type === 'image' && msg.content && String(msg.content).startsWith('data:image/')) {
+                try {
+                    msg.imageId = await saveChatImageData(msg.content, msg.imageId);
+                    msg.content = "";
+                    changed = true;
+                } catch (err) {
+                    console.error("迁移聊天图片失败", err);
+                }
+            }
+        }
+    }
+    if (changed) saveChatData();
+    if (currentChatId) renderMessages();
 }
 
 function normalizeChat(chat) {
@@ -256,13 +400,52 @@ function getPendingVisionImage(chat) {
         const msg = chat.messages[i];
         if (msg.sender === 'user' && msg.type === 'image' && !msg.visionConsumed) return msg;
     }
+    const lastUserMsg = [...chat.messages].reverse().find(m => m.sender === 'user');
+    const replyTargetId = lastUserMsg && lastUserMsg.replyTo ? lastUserMsg.replyTo.id : "";
+    if (replyTargetId) {
+        const repliedImage = chat.messages.find(m => m.id === replyTargetId && m.type === 'image');
+        if (repliedImage) return repliedImage;
+    }
     return null;
+}
+
+async function getMessageImageData(msg) {
+    if (!msg) return "";
+    if (msg.content && String(msg.content).startsWith('data:image/')) return msg.content;
+    if (msg.imageId) return await getChatImageData(msg.imageId);
+    return "";
 }
 
 function markVisionImageConsumed(imageMsg) {
     if (!imageMsg) return;
     imageMsg.visionConsumed = true;
     saveChatData();
+}
+
+function compressImageFile(file, options = {}) {
+    const maxSize = options.maxSize || 900;
+    const quality = options.quality || 0.76;
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error);
+        reader.onload = () => {
+            const img = new Image();
+            img.onerror = () => resolve(reader.result);
+            img.onload = () => {
+                const ratio = Math.min(1, maxSize / Math.max(img.width, img.height));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(img.width * ratio));
+                canvas.height = Math.max(1, Math.round(img.height * ratio));
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                let dataUrl = canvas.toDataURL('image/jpeg', quality);
+                if (!dataUrl || dataUrl.length >= String(reader.result).length) dataUrl = reader.result;
+                resolve(dataUrl);
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
 }
 
 function parseAIReplyPrefix(text, chat) {
@@ -318,6 +501,18 @@ function renderChatReplyPreview() {
         <button type="button" class="chat-reply-preview-close" onclick="cancelChatReply()">×</button>
     `;
     box.classList.remove('hidden');
+}
+
+function hydrateChatImages(root = document) {
+    root.querySelectorAll('img.chat-image-msg[data-image-id]').forEach(img => {
+        const imageId = img.dataset.imageId;
+        if (!imageId || img.dataset.loaded === '1') return;
+        img.dataset.loaded = '1';
+        getChatImageData(imageId).then(dataUrl => {
+            if (dataUrl) img.src = dataUrl;
+            else img.alt = '图片已丢失';
+        });
+    });
 }
 
 function cancelChatReply() {
@@ -607,7 +802,9 @@ function renderMessages() {
         if (msg.type === 'transfer') {
             bubbleContent = renderTransferCardBody(msg, isMe, msgRole, chatUser);
         } else if (msg.type === 'image') {
-            bubbleContent = `<img src="${msg.content}" class="chat-image-msg">`;
+            const inlineSrc = msg.content && String(msg.content).startsWith('data:image/') ? msg.content : "";
+            const placeholder = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+            bubbleContent = `<img src="${inlineSrc || placeholder}" class="chat-image-msg" ${msg.imageId ? `data-image-id="${escapeChatHTML(msg.imageId)}"` : ''} alt="${escapeChatHTML(msg.desc || '图片')}">`;
         } else if (msg.type === 'sticker') {
             bubbleContent = `<img src="${msg.content}" class="chat-sticker-img">`;
         } else {
@@ -690,6 +887,7 @@ function renderMessages() {
             ${isMe ? `<img src="${avatarSrc}" class="chat-bubble-avatar">` : ''}
         `;
         container.appendChild(row);
+        hydrateChatImages(row);
 
        // --- 4. 绑定悬浮菜单长按事件 ---
         setTimeout(() => {
@@ -930,6 +1128,8 @@ function deleteMsgFromMenu() {
     if (targetMsgIndex === -1 || !currentChatId) return;
     const chat = chats.find(c => c.id === currentChatId);
     if (chat) {
+        const msg = chat.messages[targetMsgIndex];
+        if (msg && msg.type === 'image' && msg.imageId) deleteChatImageData(msg.imageId);
         chat.messages.splice(targetMsgIndex, 1);
         saveChatData();
         renderMessages();
@@ -951,7 +1151,7 @@ function sendVoiceMessage() {
     appendMessage('user', '[语音] ' + text, 'text');
     closeVoiceModal();
 }
-function handleChatImageUpload(input) {
+async function handleChatImageUpload(input) {
     const file = input.files[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -959,12 +1159,16 @@ function handleChatImageUpload(input) {
         input.value = '';
         return;
     }
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        appendMessage('user', e.target.result, 'image', file.name || '图片');
+    try {
+        const dataUrl = await compressImageFile(file, { maxSize: 1400, quality: 0.86 });
+        const imageId = await saveChatImageData(dataUrl);
+        appendMessage('user', '', 'image', file.name || '图片', null, { imageId, visionConsumed: false });
         input.value = '';
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+        console.error('图片处理失败', err);
+        input.value = '';
+        alert('图片处理失败，请换一张试试');
+    }
 }
 function openTransferModal() {
     document.getElementById('transfer-amount-input').value = "";
@@ -1139,9 +1343,10 @@ async function triggerChatGen() {
     `;
     
     const pendingImage = getPendingVisionImage(chat);
-    const userPayload = pendingImage ? [
+    const pendingImageData = pendingImage ? await getMessageImageData(pendingImage) : "";
+    const userPayload = pendingImageData ? [
         { type: "text", text: "(Please reply now. Remember to split messages with @@SPLIT@@ and set status with @@STATUS@@). If an image is attached, react to it like a real person in chat." },
-        { type: "image_url", image_url: { url: pendingImage.content } }
+        { type: "image_url", image_url: { url: pendingImageData } }
     ] : "(Please reply now. Remember to split messages with @@SPLIT@@ and set status with @@STATUS@@)";
 
     const aiResponse = await callAI([
@@ -1202,11 +1407,11 @@ async function triggerChatGen() {
     }
 }
 
-function appendMessage(sender, content, type, desc = "", replyTo = null) {
+function appendMessage(sender, content, type, desc = "", replyTo = null, extra = {}) {
     const chat = chats.find(c => c.id === currentChatId);
     if(!chat) return;
     const attachedReply = replyTo || (sender === 'user' && pendingReplyTo ? { ...pendingReplyTo } : null);
-    chat.messages.push({ id: createMsgId(), sender: sender, content: content, type: type, desc: desc, replyTo: attachedReply, timestamp: Date.now() });
+    chat.messages.push({ id: createMsgId(), sender: sender, content: content, type: type, desc: desc, replyTo: attachedReply, timestamp: Date.now(), ...extra });
     if (sender === 'user' && pendingReplyTo) cancelChatReply();
     chat.lastTime = Date.now();
     saveChatData(); renderMessages();
@@ -1285,9 +1490,10 @@ No matter what language the user uses, all members must reply only in ${replyLan
 `;
 
     const pendingImage = getPendingVisionImage(chat);
-    const userPayload = pendingImage ? [
+    const pendingImageData = pendingImage ? await getMessageImageData(pendingImage) : "";
+    const userPayload = pendingImageData ? [
         { type: "text", text: "Reply to the group now. If an image is attached, members can react to what they see. Use @@MSG:角色ID@@ format." },
-        { type: "image_url", image_url: { url: pendingImage.content } }
+        { type: "image_url", image_url: { url: pendingImageData } }
     ] : "Reply to the group now. Use @@MSG:角色ID@@ format.";
 
     const aiResponse = await callAI([
@@ -1658,6 +1864,9 @@ function insertMention(role) {
 function clearChatHistory() {
     if(!confirm("确定清空当前对话记录？无法恢复。")) return;
     const chat = chats.find(c => c.id === currentChatId);
+    (chat.messages || []).forEach(msg => {
+        if (msg.type === 'image' && msg.imageId) deleteChatImageData(msg.imageId);
+    });
     chat.messages = []; chat.lastSummaryMsgCount = 0; saveChatData(); renderMessages(); toggleChatSidebar();
 }
 
@@ -1689,16 +1898,18 @@ function openStickerMenu(index) { targetStickerIndex = index; document.getElemen
 function closeStickerMenu() { targetStickerIndex = -1; document.getElementById('sticker-menu-modal').classList.add('hidden'); }
 function confirmDeleteSticker() { if (targetStickerIndex === -1) return; stickers.splice(targetStickerIndex, 1); saveChatData(); renderStickerGrid(); closeStickerMenu(); }
 
-function handleStickerUpload(input) {
+async function handleStickerUpload(input) {
     const file = input.files[0]; if(!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        tempStickerFile = e.target.result;
+    try {
+        tempStickerFile = await compressImageFile(file, { maxSize: 360, quality: 0.78 });
         document.getElementById('sticker-preview-img').src = tempStickerFile;
         document.getElementById('sticker-desc-input').value = "";
         document.getElementById('sticker-desc-modal').classList.remove('hidden');
-    };
-    reader.readAsDataURL(file); input.value = "";
+    } catch (err) {
+        console.error('表情包处理失败', err);
+        alert('表情包处理失败，请换一张试试');
+    }
+    input.value = "";
 }
 
 function confirmStickerUpload() {
@@ -1726,3 +1937,4 @@ document.addEventListener('click', (e) => {
         if (!panel.contains(e.target) && e.target !== btn) panel.classList.add('hidden');
     }
 });
+
