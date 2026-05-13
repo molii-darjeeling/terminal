@@ -9,6 +9,7 @@ const DM_VIBE_PROMPT = `
 为了模拟真实聊天体验，请不要一次性输出一大段话。请根据说话的节奏，自然地将回复拆分成几条简短的消息。
 数量不限，根据情况可以只回一句话，不能一直回很多句，也不能一直回一样的条数，每次回复的条数必须不一样。回复要给用户留下回话空间。
 每条消息之间用 @@SPLIT@@ 分隔。
+如果你想像 QQ/微信一样回复某一条历史消息，可以在该条回复最前面加 @@REPLY:消息ID@@，消息ID 来自 [CHAT HISTORY] 方括号。
 在回复的最开头，用 @@STATUS@@心情@@STATUS@@ 的格式更新你当前的状态（例如：正在输入…、他很开心、他在偷笑、发呆，限10字内。生成一次回复只更新一种心情）。
 
 示例输出：
@@ -24,6 +25,13 @@ const DM_VIBE_PROMPT = `
    - 参考 [SUMMARY] (长期记忆) 和 [CHAT HISTORY] (短期记忆)。
    - 如果用户提到之前的总结内容，请自然接话。
 
+【克制输出规则】
+1. 降低过度输出和表演感：真实聊天不总是长篇回应，不要每次都连续回复很多句。
+2. 允许只回一句、简单回应、短暂停顿，保留一点没有说出口的余地。
+3. 避免一次性说太多、连续堆叠情绪、自问自答、把气氛写满、强行总结关系状态。
+4. 如果用户只是轻轻说一句、发图、发表情或日常闲聊，优先自然短回，不要主动扩写成大段。
+5. 单条消息不要很长。超过一句半的内容必须用 @@SPLIT@@ 拆成几条，像手机聊天一样分开发。
+
 【活人说话技巧】
 * 长短句结合：请务必混合使用短促并且符合角色设定的口语（如“真假？”“笑死”"…めんどくせぇ""无语"）和较长的表达句子。绝对禁止网络用语。不要总是输出长度相同的句子，那样像机器人。
 2. 拒绝自说自话：
@@ -33,6 +41,38 @@ const DM_VIBE_PROMPT = `
 - **发朋友圈(SNS)**：只要你觉得聊天内容有趣、或者想吐槽、或者仅仅是想分享当前心情，就尽管发朋友圈！稍微有好的灵感就发！想要发朋友圈时，在最后一行加：@@SNS@@ (内容)
 - **发语音**：你可以发送语音消息，只需要在回复的最前面加上“[语音] ”即可。例如：[语音] 哈哈哈，太好笑了吧。
 - **撤回消息**：如果你发错了或者想模拟撤回消息的效果，可以单独输出“[撤回]”作为一条消息内容。
+`;
+
+const GROUP_VIBE_PROMPT = `
+【核心指令】：你正在模拟一个多人群聊。所有成员都在手机线上聊天，不能出现面对面动作描写。
+为了节省调用次数，本次只能进行一次 API 回复，但群聊节奏必须自然浮动：有时只有 1 个人简单回一句，有时 1 个人连发两句，有时 2 个人短短接话。
+
+【输出格式强制要求】
+1. 每条消息必须使用格式：@@MSG:角色ID@@消息内容
+2. 每个角色可以像私聊一样拆成多条短消息。每一条独立消息都用 @@SPLIT@@ 分隔，并且每条都要带 @@MSG:角色ID@@ 前缀。
+3. 本轮只允许 1-2 个角色发言。默认偏短：多数时候总共 1-2 条消息即可，偶尔 3-4 条，最多不要超过 6 条。
+4. 如果用户明确 @ 了某人，被 @ 的角色优先回复；没有 @ 时，选择最自然的 1-2 人。
+5. 可以发送语音，消息内容以「[语音] 」开头即可。
+6. 可以发送转账卡片，消息内容单独写成：[转账] 12.5 | 备注
+7. 如果要回复某条历史消息，格式为：@@MSG:角色ID@@@@REPLY:消息ID@@消息内容，消息ID 来自 [CHAT HISTORY] 方括号。
+
+节奏参考，不要固定照抄：
+- 很轻的话题：@@MSG:@sage@@嗯嗯，我觉得可以。
+- 接梗时：@@MSG:@nico@@笑死。@@SPLIT@@@@MSG:@nico@@这也太突然了吧
+- 群里有人搭话时：@@MSG:@sage@@我觉得先看看也好。@@SPLIT@@@@MSG:@nico@@赞成，别急
+
+【语境规则】
+- 群聊里大家可以互相吐槽、接梗、短句回复。
+- 不要长篇独白，不要解释自己是 AI。
+- 回复像真实聊天，保留接话空间。
+- 不要平均分配台词，不要每次都两个人，也不要每个人都固定两句。
+- 单条消息不要很长。超过一句半的内容必须用 @@SPLIT@@ 拆开。
+
+【克制输出规则】
+- 降低过度输出和表演感：真实群聊不需要每次都热闹满屏。
+- 允许本轮只有一个人回一句，或者两个人各短短接一句。
+- 避免一次性说太多、连续堆叠情绪、自问自答、把气氛写满、强行总结关系状态。
+- 如果用户只是轻轻说一句、发图、发表情或日常闲聊，优先自然短回，不要主动扩写成大段。
 `;
 
 // --- Global Chat State ---
@@ -57,6 +97,7 @@ let currentChatConfig = {
 };
 let tempStickerFile = null; 
 let chatAbortController = null;
+let pendingReplyTo = null;
 
 let longPressTimer;
 let longPressTargetChatId = null;
@@ -104,13 +145,184 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function loadChatData() {
-    if(localStorage.getItem('helios_chats')) chats = JSON.parse(localStorage.getItem('helios_chats'));
+    if(localStorage.getItem('helios_chats')) chats = JSON.parse(localStorage.getItem('helios_chats')).map(normalizeChat);
     if(localStorage.getItem('helios_stickers')) stickers = JSON.parse(localStorage.getItem('helios_stickers'));
 }
 
 function saveChatData() {
     localStorage.setItem('helios_chats', JSON.stringify(chats));
     localStorage.setItem('helios_stickers', JSON.stringify(stickers));
+}
+
+function normalizeChat(chat) {
+    if (!chat) return null;
+    if (!chat.type) chat.type = chat.memberRoleIds ? 'group' : 'dm';
+    if (!Array.isArray(chat.messages)) chat.messages = [];
+    chat.messages.forEach(msg => {
+        if (!msg.id) msg.id = createMsgId();
+    });
+    if (!chat.settings) chat.settings = {};
+    if (!chat.settings.wbIndices) chat.settings.wbIndices = [];
+    if (!chat.settings.historyLimit) chat.settings.historyLimit = 20;
+    if (chat.settings.profileIdx === undefined) chat.settings.profileIdx = (typeof currentProfileIndex !== 'undefined' ? currentProfileIndex : 0);
+    if (!chat.settings.replyLanguage) chat.settings.replyLanguage = 'zh';
+    if (chat.type === 'group') {
+        if (!Array.isArray(chat.memberRoleIds)) chat.memberRoleIds = [];
+        if (!chat.name) chat.name = buildGroupName(chat.memberRoleIds);
+    }
+    return chat;
+}
+
+function getChatRole(chat) {
+    return chat && chat.roleId ? roles.find(r => r.id === chat.roleId) : null;
+}
+
+function getGroupMembers(chat) {
+    if (!chat || chat.type !== 'group') return [];
+    return (chat.memberRoleIds || []).map(id => roles.find(r => r.id === id)).filter(Boolean);
+}
+
+function buildGroupName(memberRoleIds) {
+    const names = (memberRoleIds || []).map(id => {
+        const role = roles.find(r => r.id === id);
+        return role ? role.name : '';
+    }).filter(Boolean);
+    if (names.length === 0) return '新群聊';
+    if (names.length <= 2) return names.join('、');
+    return `${names.slice(0, 2).join('、')} 等${names.length}人`;
+}
+
+function renderGroupListAvatar(groupMembers) {
+    const members = groupMembers.slice(0, 4);
+    const countClass = members.length >= 4 ? 'four' : members.length === 3 ? 'three' : members.length === 2 ? 'two' : 'one';
+    const cells = members.map(role => `<img src="${escapeChatHTML(role.avatar || '')}" alt="">`).join('');
+    return `<div class="chat-list-avatar group-list-avatar ${countClass}">${cells}</div>`;
+}
+
+function createMsgId() {
+    return "msg_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+}
+
+function getMessageSenderName(msg, chat) {
+    if (!msg) return "消息";
+    if (msg.sender === 'user') {
+        const chatUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
+        return chatUser.name || "我";
+    }
+    const role = msg.roleId ? roles.find(r => r.id === msg.roleId) : getChatRole(chat);
+    return role ? role.name : "对方";
+}
+
+function getMessagePreviewText(msg, chat) {
+    if (!msg) return "";
+    let text = "";
+    if (msg.isRecalled) text = "[撤回了一条消息]";
+    else if (msg.type === 'sticker') text = "[表情包]";
+    else if (msg.type === 'image') text = "[图片]";
+    else if (msg.type === 'transfer') text = formatTransferText(msg, msg.roleId ? roles.find(r => r.id === msg.roleId) : getChatRole(chat));
+    else text = msg.content || "";
+    text = String(text).replace(/^\[语音\]\s*/, "[语音] ").replace(/\s+/g, " ").trim();
+    return text.length > 42 ? text.slice(0, 42) + "..." : text;
+}
+
+function buildReplySnapshot(chat, msg) {
+    if (!chat || !msg) return null;
+    if (!msg.id) msg.id = createMsgId();
+    return {
+        id: msg.id,
+        name: getMessageSenderName(msg, chat),
+        preview: getMessagePreviewText(msg, chat)
+    };
+}
+
+function renderReplyQuote(replyTo) {
+    if (!replyTo) return "";
+    return `
+        <div class="chat-reply-quote">
+            <div class="chat-reply-quote-name">${escapeChatHTML(replyTo.name || "消息")}</div>
+            <div class="chat-reply-quote-text">${escapeChatHTML(replyTo.preview || "")}</div>
+        </div>
+    `;
+}
+
+function getReplyPromptLine(msg) {
+    return msg && msg.replyTo ? ` [replying to ${msg.replyTo.name}: ${msg.replyTo.preview}]` : "";
+}
+
+function getPendingVisionImage(chat) {
+    if (!chat || !Array.isArray(chat.messages)) return null;
+    const lastRoleIndex = chat.messages.map(m => m.sender).lastIndexOf('role');
+    for (let i = chat.messages.length - 1; i > lastRoleIndex; i--) {
+        const msg = chat.messages[i];
+        if (msg.sender === 'user' && msg.type === 'image' && !msg.visionConsumed) return msg;
+    }
+    return null;
+}
+
+function markVisionImageConsumed(imageMsg) {
+    if (!imageMsg) return;
+    imageMsg.visionConsumed = true;
+    saveChatData();
+}
+
+function parseAIReplyPrefix(text, chat) {
+    const raw = String(text || '').trim();
+    const match = raw.match(/^@@REPLY:([^@]+?)@@([\s\S]*)$/);
+    if (!match) return { content: raw, replyTo: null };
+    const targetId = match[1].trim();
+    const targetMsg = chat && Array.isArray(chat.messages) ? chat.messages.find(m => m.id === targetId) : null;
+    return {
+        content: match[2].trim(),
+        replyTo: targetMsg ? buildReplySnapshot(chat, targetMsg) : null
+    };
+}
+
+function splitLongChatText(text) {
+    const raw = String(text || '').trim();
+    if (!raw || raw.length <= 52 || raw.startsWith('[语音]') || raw === '[撤回]' || isTransferCommand(raw)) return [raw];
+    const chunks = [];
+    let buf = "";
+    const punctuation = "。！？!?；;，,、…";
+    for (let i = 0; i < raw.length; i++) {
+        const ch = raw[i];
+        buf += ch;
+        const shouldSoftBreak = buf.length >= 24 && punctuation.includes(ch);
+        const shouldHardBreak = buf.length >= 52;
+        if (shouldSoftBreak || shouldHardBreak) {
+            chunks.push(buf.trim());
+            buf = "";
+            if (chunks.length >= 5 && i < raw.length - 1) {
+                chunks.push(raw.slice(i + 1).trim());
+                break;
+            }
+        }
+    }
+    if (buf.trim()) chunks.push(buf.trim());
+    return chunks.filter(Boolean);
+}
+
+function renderChatReplyPreview() {
+    const box = document.getElementById('chat-reply-preview');
+    if (!box) return;
+    if (!pendingReplyTo) {
+        box.classList.add('hidden');
+        box.innerHTML = "";
+        return;
+    }
+    box.innerHTML = `
+        <div class="chat-reply-preview-bar"></div>
+        <div class="chat-reply-preview-main">
+            <div class="chat-reply-preview-title">回复 ${escapeChatHTML(pendingReplyTo.name || "消息")}</div>
+            <div class="chat-reply-preview-text">${escapeChatHTML(pendingReplyTo.preview || "")}</div>
+        </div>
+        <button type="button" class="chat-reply-preview-close" onclick="cancelChatReply()">×</button>
+    `;
+    box.classList.remove('hidden');
+}
+
+function cancelChatReply() {
+    pendingReplyTo = null;
+    renderChatReplyPreview();
 }
 
 // --- Navigation & List View ---
@@ -136,17 +348,25 @@ function renderChatList() {
         return b.lastTime - a.lastTime; 
     });
 
-    sortedChats.forEach(chat => {
-        const role = roles.find(r => r.id === chat.roleId);
-        if(!role) return;
+    sortedChats.forEach(rawChat => {
+        const chat = normalizeChat(rawChat);
+        const role = getChatRole(chat);
+        const groupMembers = getGroupMembers(chat);
+        if(chat.type !== 'group' && !role) return;
+        if(chat.type === 'group' && groupMembers.length === 0) return;
 
         const lastMsg = chat.messages.length > 0 ? chat.messages[chat.messages.length-1] : { content: "新对话", timestamp: "" };
-        let previewText = lastMsg.type === 'sticker' ? '[表情包]' : lastMsg.content;
+        let previewText = lastMsg.type === 'sticker' ? '[表情包]' : (lastMsg.type === 'image' ? '[图片]' : lastMsg.content);
         
         if (lastMsg.isRecalled) previewText = '[撤回了一条消息]';
         else if (previewText.startsWith('[语音]')) previewText = '[语音]';
+        else if (lastMsg.type === 'transfer') previewText = '[转账]';
 
         if(previewText.length > 20) previewText = previewText.substring(0, 20) + "...";
+        const title = chat.type === 'group' ? (chat.name || buildGroupName(chat.memberRoleIds)) : role.name;
+        const avatar = chat.type === 'group' ? '' : role.avatar;
+        const avatarHtml = chat.type === 'group' ? renderGroupListAvatar(groupMembers) : `<img src="${avatar}" class="chat-list-avatar">`;
+        const badge = chat.type === 'group' ? `<span style="color:#888;font-size:0.75rem;margin-left:5px;">群聊 · ${groupMembers.length}人</span>` : '';
 
         const div = document.createElement('div');
         div.className = `chat-list-item ${chat.isPinned ? 'pinned' : ''}`;
@@ -159,10 +379,11 @@ function renderChatList() {
         div.onmouseup = () => clearTimeout(longPressTimer);
 
         div.innerHTML = `
-            <img src="${role.avatar}" class="chat-list-avatar">
+            ${avatarHtml}
             <div class="chat-list-info">
                 <div class="chat-list-name">
-                    ${role.name}
+                    ${title}
+                    ${badge}
                     ${chat.isPinned ? '<span style="color:var(--nav-bg);font-size:0.8rem;margin-left:5px;">(置顶)</span>' : ''}
                 </div>
                 <div class="chat-list-preview">${previewText}</div>
@@ -209,11 +430,10 @@ function closeNewChatModal() { document.getElementById('new-chat-modal').classLi
 function createNewChat() {
     const roleId = document.getElementById('new-chat-role-select').value;
     if(!roleId) return;
-    const existing = chats.find(c => c.roleId === roleId);
-    if(existing) { closeNewChatModal(); enterChatRoom(existing.id); return; }
 
     const newChat = {
         id: "chat_" + Date.now(),
+        type: 'dm',
         roleId: roleId,
         lastTime: Date.now(),
         isPinned: false,
@@ -230,12 +450,65 @@ function createNewChat() {
     saveChatData(); closeNewChatModal(); enterChatRoom(newChat.id);
 }
 
+function openGroupCreateModal(fromCurrentChat = false) {
+    const list = document.getElementById('group-create-role-list');
+    list.innerHTML = "";
+    const currentChat = fromCurrentChat ? chats.find(c => c.id === currentChatId) : null;
+    const preselectIds = currentChat && currentChat.type === 'dm' && currentChat.roleId ? [currentChat.roleId] : [];
+    roles.forEach(r => {
+        if (r.isEnabled === false) return;
+        const label = document.createElement('label');
+        label.className = 'group-role-option';
+        label.innerHTML = `
+            <input type="checkbox" value="${escapeChatHTML(r.id)}" ${preselectIds.includes(r.id) ? 'checked' : ''}>
+            <img src="${escapeChatHTML(r.avatar || '')}">
+            <span>${escapeChatHTML(r.name || r.id)}</span>
+        `;
+        list.appendChild(label);
+    });
+    document.getElementById('group-create-name').value = "";
+    document.getElementById('group-create-modal').classList.remove('hidden');
+}
+
+function closeGroupCreateModal() {
+    document.getElementById('group-create-modal').classList.add('hidden');
+}
+
+function createGroupChat() {
+    const checked = Array.from(document.querySelectorAll('#group-create-role-list input:checked')).map(input => input.value);
+    if (checked.length < 2) {
+        alert('群聊至少选择 2 个角色');
+        return;
+    }
+    const nameInput = document.getElementById('group-create-name').value.trim();
+    const newChat = {
+        id: "group_" + Date.now(),
+        type: 'group',
+        name: nameInput || buildGroupName(checked),
+        memberRoleIds: checked,
+        lastTime: Date.now(),
+        isPinned: false,
+        settings: {
+            bg: "", historyLimit: 20, wbIndices: [], profileIdx: (typeof currentProfileIndex !== 'undefined' ? currentProfileIndex : 0),
+            replyLanguage: "zh",
+            summaryOn: "off", summaryInterval: 10, summaryContent: ""
+        },
+        messages: [],
+        lastSummaryMsgCount: 0
+    };
+    chats.push(newChat);
+    saveChatData();
+    closeGroupCreateModal();
+    enterChatRoom(newChat.id);
+}
+
 // --- Chat Room Logic ---
 function enterChatRoom(chatId) {
-    const chat = chats.find(c => c.id === chatId);
+    const chat = normalizeChat(chats.find(c => c.id === chatId));
     if(!chat) return;
 
     currentChatId = chatId;
+    pendingReplyTo = null;
     let safeWbIndices = [];
     if (chat.settings.wbIndices && Array.isArray(chat.settings.wbIndices)) safeWbIndices = chat.settings.wbIndices;
     else if (chat.settings.wbIdx !== undefined && chat.settings.wbIdx !== "off") safeWbIndices = [parseInt(chat.settings.wbIdx)];
@@ -258,8 +531,11 @@ function enterChatRoom(chatId) {
     document.getElementById('chat-msg-container').style.backgroundImage = currentChatConfig.bg ? `url('${currentChatConfig.bg}')` : 'none';
     
     initSidebarValues();
-    const role = roles.find(r => r.id === chat.roleId);
-    document.getElementById('chat-title-name').innerText = role ? role.name : "Chat";
+    const role = getChatRole(chat);
+    document.getElementById('chat-title-name').innerText = chat.type === 'group' ? (chat.name || buildGroupName(chat.memberRoleIds)) : (role ? role.name : "Chat");
+    document.getElementById('group-mention-btn').classList.toggle('hidden', chat.type !== 'group');
+    document.getElementById('group-sidebar-section').classList.toggle('hidden', chat.type !== 'group');
+    document.getElementById('dm-group-section').classList.toggle('hidden', chat.type === 'group');
     renderMessages();
 
     document.getElementById('chat-summary-toggle').value = currentChatConfig.summaryOn;
@@ -268,10 +544,13 @@ function enterChatRoom(chatId) {
     document.getElementById('chat-title-status').innerText = ""; 
     const input = document.getElementById('chat-input');
     input.style.height = 'auto'; input.value = "";
+    renderChatReplyPreview();
 }
 
 function exitChatRoom() {
     currentChatId = null;
+    pendingReplyTo = null;
+    renderChatReplyPreview();
     closeFloatingMenu(); // 安全退出时清理菜单
     document.getElementById('chat-room-page').classList.add('hidden');
     enterChatList();
@@ -289,12 +568,13 @@ function renderMessages() {
     const container = document.getElementById('chat-msg-container');
     container.innerHTML = "";
 
-    const role = roles.find(r => r.id === chat.roleId);
+    const role = getChatRole(chat);
     const chatUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
 
     chat.messages.forEach((msg,index) => {
         const isMe = msg.sender === 'user';
-        const avatarSrc = isMe ? chatUser.avatar : (role ? role.avatar : "");
+        const msgRole = msg.roleId ? roles.find(r => r.id === msg.roleId) : role;
+        const avatarSrc = isMe ? chatUser.avatar : (msgRole ? msgRole.avatar : "");
         
         const row = document.createElement('div');
         row.className = `chat-bubble-row ${isMe ? 'right' : 'left'}`;
@@ -303,7 +583,7 @@ function renderMessages() {
         
         // --- 1. 处理撤回消息 ---
         if (msg.isRecalled) {
-            let senderName = isMe ? chatUser.name : (role ? role.name : '对方');
+            let senderName = isMe ? chatUser.name : (msgRole ? msgRole.name : '对方');
             row.innerHTML = `<div class="system-recall-msg">${senderName} 撤回了一条消息</div>`;
             row.style.justifyContent = 'center';
             container.appendChild(row);
@@ -325,12 +605,15 @@ function renderMessages() {
 
         let bubbleContent = "";
         if (msg.type === 'transfer') {
-            bubbleContent = renderTransferCardBody(msg, isMe, role, chatUser);
+            bubbleContent = renderTransferCardBody(msg, isMe, msgRole, chatUser);
+        } else if (msg.type === 'image') {
+            bubbleContent = `<img src="${msg.content}" class="chat-image-msg">`;
         } else if (msg.type === 'sticker') {
             bubbleContent = `<img src="${msg.content}" class="chat-sticker-img">`;
         } else {
             bubbleContent = msgContent.replace(/\n/g, '<br>');
         }
+        const replyQuoteHTML = renderReplyQuote(msg.replyTo);
 
         const bubbleLayout = `
             padding: 10px 14px;
@@ -361,7 +644,10 @@ function renderMessages() {
             innerHTMLContent = `
                 <div style="display:flex; align-items:flex-end; gap:5px;">
                     ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
-                    <div class="chat-bubble-content transfer-card ${targetClass}">${bubbleContent}</div>
+                    <div>
+                        ${chat.type === 'group' && !isMe && msgRole ? `<div class="group-sender-name">${escapeChatHTML(msgRole.name)}</div>` : ''}
+                        <div class="chat-bubble-content transfer-card ${targetClass}">${replyQuoteHTML}${bubbleContent}</div>
+                    </div>
                     ${!isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                 </div>
             `;
@@ -374,8 +660,12 @@ function renderMessages() {
                 <div style="display:flex; align-items:flex-end; gap:5px;">
                     ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                     <div style="display:flex; flex-direction:column; align-items:${isMe ? 'flex-end' : 'flex-start'};">
-                        <div class="chat-bubble-content voice-bubble ${targetClass}" style="${bubbleLayout}; display:flex; align-items:center; gap:6px;" onclick="toggleVoiceText(event, ${index})">
-                            ${isMe ? `${voiceDuration}" ${voiceIconSvg}` : `${voiceIconSvg} ${voiceDuration}"`}
+                        ${chat.type === 'group' && !isMe && msgRole ? `<div class="group-sender-name">${escapeChatHTML(msgRole.name)}</div>` : ''}
+                        <div class="chat-bubble-content voice-bubble ${targetClass}" style="${bubbleLayout};" onclick="toggleVoiceText(event, ${index})">
+                            ${replyQuoteHTML}
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                ${isMe ? `${voiceDuration}" ${voiceIconSvg}` : `${voiceIconSvg} ${voiceDuration}"`}
+                            </div>
                         </div>
                         <div id="voice-text-${index}" class="voice-text hidden">${msgContent}</div>
                     </div>
@@ -386,7 +676,10 @@ function renderMessages() {
             innerHTMLContent = `
                 <div style="display:flex; align-items:flex-end; gap:5px;">
                     ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
-                    <div class="chat-bubble-content ${targetClass}" style="${bubbleLayout}">${bubbleContent}</div>
+                    <div>
+                        ${chat.type === 'group' && !isMe && msgRole ? `<div class="group-sender-name">${escapeChatHTML(msgRole.name)}</div>` : ''}
+                        <div class="chat-bubble-content ${targetClass}" style="${bubbleLayout}">${replyQuoteHTML}${bubbleContent}</div>
+                    </div>
                     ${!isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                 </div>
             `;
@@ -538,7 +831,9 @@ function copyMsg(e) {
         const chat = chats.find(c => c.id === currentChatId);
         if (chat && chat.messages[targetMsgIndex]) {
             const targetMsg = chat.messages[targetMsgIndex];
-            text = targetMsg.type === 'transfer' ? formatTransferText(targetMsg, roles.find(r => r.id === chat.roleId)) : targetMsg.content;
+            if (targetMsg.type === 'transfer') text = formatTransferText(targetMsg, targetMsg.roleId ? roles.find(r => r.id === targetMsg.roleId) : getChatRole(chat));
+            else if (targetMsg.type === 'image') text = '[图片]';
+            else text = targetMsg.content;
             // 清理可能带有的语音前缀
             if (text.startsWith('[语音]')) text = text.replace(/^\[语音\]\s*/, '').trim();
         }
@@ -579,11 +874,27 @@ function showToast(msg) {
     setTimeout(() => { toast.classList.add('hidden'); }, 1500);
 }
 
+function replyMsg() {
+    if (targetMsgIndex === -1 || !currentChatId) return;
+    const chat = normalizeChat(chats.find(c => c.id === currentChatId));
+    const msg = chat && chat.messages[targetMsgIndex];
+    if (!msg || msg.isRecalled) {
+        closeFloatingMenu();
+        return;
+    }
+    pendingReplyTo = buildReplySnapshot(chat, msg);
+    saveChatData();
+    closeFloatingMenu();
+    renderChatReplyPreview();
+    const input = document.getElementById('chat-input');
+    if (input) setTimeout(() => input.focus(), 30);
+}
+
 function editMsg() {
     const chat = chats.find(c => c.id === currentChatId);
     const msg = chat && chat.messages[targetMsgIndex];
-    if (msg && msg.type === 'transfer') {
-        showToast('转账卡片不可编辑');
+    if (msg && (msg.type === 'transfer' || msg.type === 'image')) {
+        showToast('卡片不可编辑');
         closeFloatingMenu();
         return;
     }
@@ -593,7 +904,7 @@ function editMsg() {
 }
 
 function saveEditMsg(index, isVoice) {
-    const chat = chats.find(c => c.id === currentChatId);
+    const chat = normalizeChat(chats.find(c => c.id === currentChatId));
     if (!chat) return;
     const input = document.getElementById('inline-edit-input');
     let newContent = input.value;
@@ -639,6 +950,21 @@ function sendVoiceMessage() {
     if (!text) return;
     appendMessage('user', '[语音] ' + text, 'text');
     closeVoiceModal();
+}
+function handleChatImageUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+        alert('请选择图片文件');
+        input.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        appendMessage('user', e.target.result, 'image', file.name || '图片');
+        input.value = '';
+    };
+    reader.readAsDataURL(file);
 }
 function openTransferModal() {
     document.getElementById('transfer-amount-input').value = "";
@@ -699,8 +1025,12 @@ async function triggerChatGen() {
         return;
     }
     
-    const chat = chats.find(c => c.id === currentChatId);
+    const chat = normalizeChat(chats.find(c => c.id === currentChatId));
     if (!chat) return;
+    if (chat.type === 'group' || Array.isArray(chat.memberRoleIds)) {
+        chat.type = 'group';
+        return triggerGroupChatGen(chat, btnImg, ICON_IDLE, ICON_STOP);
+    }
     
     const now = new Date();
     const hour = now.getHours();
@@ -721,7 +1051,11 @@ async function triggerChatGen() {
     2. Check the [YOUR ROLE] and [USER INFO] Persona descriptions. If today matches any birthday mentioned there, acknowledge it naturally.
     `;
 
-    const role = roles.find(r => r.id === chat.roleId);
+    const role = getChatRole(chat);
+    if (!role) {
+        alert("找不到这个私聊角色，可能已从通讯录删除。");
+        return;
+    }
     const chatUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
     const replyLanguageName = currentChatConfig.replyLanguage === 'ja' ? 'Japanese' : 'Simplified Chinese';
     
@@ -760,13 +1094,15 @@ async function triggerChatGen() {
             content = "[撤回了一条消息]";
         } else if (m.type === 'sticker') {
             content = `[发了一个表情包: ${m.desc || '图片'}]`;
+        } else if (m.type === 'image') {
+            content = `[发了一张图片: ${m.desc || '图片'}]`;
         } else if (m.type === 'transfer') {
             content = formatTransferText(m, role);
         } else {
             content = m.content;
         }
         
-        return `${name}: ${content}`;
+        return `[${m.id}] ${name}${getReplyPromptLine(m)}: ${content}`;
     }).join("\n");
     
     let summaryPrompt = "";
@@ -802,10 +1138,17 @@ async function triggerChatGen() {
     The amount is USD. The note after | is optional. Do not calculate balances.
     `;
     
+    const pendingImage = getPendingVisionImage(chat);
+    const userPayload = pendingImage ? [
+        { type: "text", text: "(Please reply now. Remember to split messages with @@SPLIT@@ and set status with @@STATUS@@). If an image is attached, react to it like a real person in chat." },
+        { type: "image_url", image_url: { url: pendingImage.content } }
+    ] : "(Please reply now. Remember to split messages with @@SPLIT@@ and set status with @@STATUS@@)";
+
     const aiResponse = await callAI([
         { role: "system", content: fullSystemPrompt },
-        { role: "user", content: "(Please reply now. Remember to split messages with @@SPLIT@@ and set status with @@STATUS@@)" }
+        { role: "user", content: userPayload }
     ], chatAbortController.signal);
+    markVisionImageConsumed(pendingImage);
     
     chatAbortController = null;
     btnImg.src = ICON_IDLE;
@@ -828,22 +1171,28 @@ async function triggerChatGen() {
             if (parts[1]) snsDraft = parts[1].trim();
         }
         
-        const msgParts = rawContent.split("@@SPLIT@@");
+        const msgParts = rawContent.split("@@SPLIT@@")
+            .map(part => parseAIReplyPrefix(part, chat))
+            .flatMap(parsed => splitLongChatText(parsed.content).map((content, idx) => ({
+                content,
+                replyTo: idx === 0 ? parsed.replyTo : null
+            })))
+            .slice(0, 6);
         
         for (let i = 0; i < msgParts.length; i++) {
-            const part = msgParts[i].trim();
+            const part = msgParts[i].content.trim();
             if (part) {
                 if (i > 0) await new Promise(r => setTimeout(r, 600));
                 
                 if (part === '[撤回]') {
-                     chat.messages.push({ sender: 'role', content: "", type: 'text', isRecalled: true, timestamp: Date.now() });
+                     chat.messages.push({ id: createMsgId(), sender: 'role', content: "", type: 'text', isRecalled: true, replyTo: msgParts[i].replyTo, timestamp: Date.now() });
                      chat.lastTime = Date.now();
                      saveChatData(); renderMessages();
                 } else if (isTransferCommand(part)) {
                      const transfer = parseTransferCommand(part);
-                     appendTransferMessage('role', transfer.amount, transfer.note);
+                     appendTransferMessage('role', transfer.amount, transfer.note, role ? role.id : '', msgParts[i].replyTo);
                 } else {
-                     appendMessage('role', part, 'text');
+                     appendMessage('role', part, 'text', '', msgParts[i].replyTo);
                 }
             }
         }
@@ -853,26 +1202,156 @@ async function triggerChatGen() {
     }
 }
 
-function appendMessage(sender, content, type, desc = "") {
+function appendMessage(sender, content, type, desc = "", replyTo = null) {
     const chat = chats.find(c => c.id === currentChatId);
     if(!chat) return;
-    chat.messages.push({ sender: sender, content: content, type: type, desc: desc, timestamp: Date.now() });
+    const attachedReply = replyTo || (sender === 'user' && pendingReplyTo ? { ...pendingReplyTo } : null);
+    chat.messages.push({ id: createMsgId(), sender: sender, content: content, type: type, desc: desc, replyTo: attachedReply, timestamp: Date.now() });
+    if (sender === 'user' && pendingReplyTo) cancelChatReply();
     chat.lastTime = Date.now();
     saveChatData(); renderMessages();
 }
 
-function appendTransferMessage(sender, amount, note = "") {
+async function triggerGroupChatGen(chat, btnImg, iconIdle, iconStop) {
+    const members = getGroupMembers(chat);
+    if (members.length === 0) return;
+
+    chatAbortController = new AbortController();
+    btnImg.src = iconStop;
+    document.getElementById('chat-title-status').innerText = "群里正在输入…";
+
+    const chatUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
+    const replyLanguageName = currentChatConfig.replyLanguage === 'ja' ? 'Japanese' : 'Simplified Chinese';
+
+    let wbContext = "";
+    if (currentChatConfig.activeWorldBookIndices && typeof globalWorldBooks !== 'undefined') {
+        const selectedWbs = currentChatConfig.activeWorldBookIndices
+            .map(idx => globalWorldBooks[idx])
+            .filter(wb => wb && wb.isEnabled !== false)
+            .map(wb => wb.content)
+            .join("\n\n");
+        if (selectedWbs) wbContext = `[WORLD INFO]\n${selectedWbs}`;
+    }
+
+    const historyLimit = Math.min(parseInt(currentChatConfig.historyLimit) || 20, 24);
+    const recentMsgs = chat.messages.slice(-historyLimit);
+    const mentionedIds = extractMentionIds(recentMsgs.filter(m => m.sender === 'user').slice(-2).map(m => m.content || '').join(' '), chat);
+    const speakerPool = pickGroupSpeakers(members, mentionedIds);
+    const allowedSpeakerIds = speakerPool.map(r => r.id).join(', ');
+    const memberText = speakerPool.map(r => {
+        const marker = mentionedIds.includes(r.id) ? ' [MENTIONED]' : '';
+        return `- ${r.name} (${r.id})${marker}\n  Persona: ${r.persona}`;
+    }).join("\n");
+
+    const historyText = recentMsgs.map(m => {
+        let speaker = chatUser.name;
+        if (m.sender !== 'user') {
+            const r = roles.find(role => role.id === m.roleId);
+            speaker = r ? r.name : '成员';
+        }
+        let content = m.content || '';
+        if (m.isRecalled) content = '[撤回了一条消息]';
+        else if (m.type === 'sticker') content = `[发了一个表情包: ${m.desc || '图片'}]`;
+        else if (m.type === 'image') content = `[发了一张图片: ${m.desc || '图片'}]`;
+        else if (m.type === 'transfer') content = formatTransferText(m, roles.find(r => r.id === m.roleId));
+        return `[${m.id}] ${speaker}${getReplyPromptLine(m)}: ${content}`;
+    }).join("\n");
+
+    const fullSystemPrompt = `
+${GROUP_VIBE_PROMPT}
+${typeof HELIOS_WORLD_CONFIG !== 'undefined' ? HELIOS_WORLD_CONFIG : ''}
+
+[GROUP]
+Name: ${chat.name || buildGroupName(chat.memberRoleIds)}
+
+[USER INFO]
+Name: ${chatUser.name}
+Persona: ${chatUser.persona}
+
+[GROUP MEMBERS]
+${memberText}
+
+${wbContext}
+
+[CHAT HISTORY]
+${historyText}
+
+[TOKEN SAVING RULES]
+Only these members may speak this round: ${allowedSpeakerIds}.
+Most rounds should be brief. Choose one member by default; use both only when it feels like a real group chat follow-up. One short message is often enough. Do not evenly assign two messages to each member.
+
+[REPLY LANGUAGE]
+No matter what language the user uses, all members must reply only in ${replyLanguageName}.
+`;
+
+    const pendingImage = getPendingVisionImage(chat);
+    const userPayload = pendingImage ? [
+        { type: "text", text: "Reply to the group now. If an image is attached, members can react to what they see. Use @@MSG:角色ID@@ format." },
+        { type: "image_url", image_url: { url: pendingImage.content } }
+    ] : "Reply to the group now. Use @@MSG:角色ID@@ format.";
+
+    const aiResponse = await callAI([
+        { role: "system", content: fullSystemPrompt },
+        { role: "user", content: userPayload }
+    ], chatAbortController.signal);
+    markVisionImageConsumed(pendingImage);
+
+    chatAbortController = null;
+    btnImg.src = iconIdle;
+    btnImg.style.opacity = "1";
+    document.getElementById('chat-title-status').innerText = "";
+
+    if (!aiResponse) return;
+    const parts = aiResponse.split("@@SPLIT@@").map(p => p.trim()).filter(Boolean).slice(0, 6);
+    let shownCount = 0;
+    for (let i = 0; i < parts.length; i++) {
+        if (shownCount >= 6) break;
+        const parsed = parseGroupAIMessage(parts[i], chat);
+        if (!parsed || !parsed.roleId || !parsed.content) continue;
+        if (i > 0) await new Promise(r => setTimeout(r, 600));
+        const contentParts = splitLongChatText(parsed.content);
+        for (let j = 0; j < contentParts.length; j++) {
+            if (shownCount >= 6) break;
+            const content = contentParts[j];
+            if (j > 0) await new Promise(r => setTimeout(r, 600));
+            const replyTo = j === 0 ? parsed.replyTo : null;
+            if (isTransferCommand(content)) {
+                const transfer = parseTransferCommand(content);
+                appendTransferMessage('role', transfer.amount, transfer.note, parsed.roleId, replyTo);
+            } else {
+                appendRoleMessage(parsed.roleId, content, 'text', '', replyTo);
+            }
+            shownCount++;
+        }
+    }
+}
+
+function appendRoleMessage(roleId, content, type = 'text', desc = '', replyTo = null) {
+    const chat = normalizeChat(chats.find(c => c.id === currentChatId));
+    if (!chat) return;
+    chat.messages.push({ id: createMsgId(), sender: 'role', roleId, content, type, desc, replyTo, timestamp: Date.now() });
+    chat.lastTime = Date.now();
+    saveChatData();
+    renderMessages();
+}
+
+function appendTransferMessage(sender, amount, note = "", roleId = "", replyTo = null) {
     const chat = chats.find(c => c.id === currentChatId);
     if(!chat) return;
+    const attachedReply = replyTo || (sender === 'user' && pendingReplyTo ? { ...pendingReplyTo } : null);
     chat.messages.push({
+        id: createMsgId(),
         sender,
+        roleId,
         type: 'transfer',
         amount: Math.round(Number(amount) * 100) / 100,
         note,
         currency: 'USD',
         content: `[转账] $${formatTransferAmount(amount)}${note ? ` (${note})` : ''}`,
+        replyTo: attachedReply,
         timestamp: Date.now()
     });
+    if (sender === 'user' && pendingReplyTo) cancelChatReply();
     chat.lastTime = Date.now();
     saveChatData();
     renderMessages();
@@ -912,6 +1391,36 @@ function parseTransferCommand(text) {
         amount: Number(match[2]),
         note: (match[3] || '').trim()
     };
+}
+
+function parseGroupAIMessage(text, chat) {
+    const raw = String(text || '').trim();
+    const match = raw.match(/^@@MSG:(.*?)@@([\s\S]*)$/);
+    if (!match) {
+        const fallback = getGroupMembers(chat)[0];
+        const parsedReply = parseAIReplyPrefix(raw.replace(/^[-:：\s]+/, ''), chat);
+        return fallback ? { roleId: fallback.id, content: parsedReply.content, replyTo: parsedReply.replyTo } : null;
+    }
+    let roleId = match[1].trim();
+    if (!roleId.startsWith('@')) roleId = '@' + roleId.replace(/^@/, '');
+    const allowed = getGroupMembers(chat).find(r => r.id === roleId);
+    if (!allowed) return null;
+    const parsedReply = parseAIReplyPrefix(match[2].trim(), chat);
+    return { roleId, content: parsedReply.content, replyTo: parsedReply.replyTo };
+}
+
+function extractMentionIds(text, chat) {
+    const members = getGroupMembers(chat);
+    const source = String(text || '');
+    return members.filter(r => source.includes(r.id) || source.includes('@' + r.name) || source.includes(r.name)).map(r => r.id);
+}
+
+function pickGroupSpeakers(members, mentionedIds = []) {
+    const mentioned = members.filter(r => mentionedIds.includes(r.id));
+    if (mentioned.length > 0) return mentioned.slice(0, 2);
+    const shuffled = members.slice().sort(() => Math.random() - 0.5);
+    const count = shuffled.length > 1 && Math.random() < 0.18 ? 2 : 1;
+    return shuffled.slice(0, count);
 }
 
 function escapeChatHTML(value) {
@@ -977,6 +1486,7 @@ document.addEventListener('click', function(event) {
 });
 
 function initSidebarValues() {
+    const chat = chats.find(c => c.id === currentChatId);
     const userSelect = document.getElementById('chat-user-select');
     userSelect.innerHTML = "";
     userProfiles.forEach((p, idx) => {
@@ -1017,6 +1527,7 @@ function initSidebarValues() {
     document.getElementById('chat-history-limit').onchange = (e) => updateChatSetting('historyLimit', e.target.value);
     document.getElementById('chat-summary-toggle').onchange = (e) => updateChatSetting('summaryOn', e.target.value);
     document.getElementById('chat-summary-interval').onchange = (e) => updateChatSetting('summaryInterval', e.target.value);
+    renderGroupSidebar(chat);
 }
 
 function updateWbTriggerText(count) {
@@ -1048,6 +1559,100 @@ function saveChatBg() {
     const url = document.getElementById('chat-bg-input').value;
     updateChatSetting('bg', url);
     document.getElementById('chat-msg-container').style.backgroundImage = `url('${url}')`;
+}
+
+function renderGroupSidebar(chat) {
+    const section = document.getElementById('group-sidebar-section');
+    if (!section || !chat || chat.type !== 'group') return;
+    document.getElementById('group-name-input').value = chat.name || buildGroupName(chat.memberRoleIds);
+    const list = document.getElementById('group-member-list');
+    list.innerHTML = "";
+    getGroupMembers(chat).forEach(role => {
+        const item = document.createElement('div');
+        item.className = 'group-member-item';
+        item.innerHTML = `
+            <img src="${escapeChatHTML(role.avatar || '')}">
+            <span>${escapeChatHTML(role.name || role.id)}</span>
+            <button onclick="removeGroupMember('${escapeChatHTML(role.id)}')">踢出</button>
+        `;
+        list.appendChild(item);
+    });
+
+    const addSelect = document.getElementById('group-add-member-select');
+    addSelect.innerHTML = "";
+    roles.forEach(role => {
+        if (role.isEnabled === false || chat.memberRoleIds.includes(role.id)) return;
+        const opt = document.createElement('option');
+        opt.value = role.id;
+        opt.innerText = role.name;
+        addSelect.appendChild(opt);
+    });
+}
+
+function saveGroupName(name) {
+    const chat = chats.find(c => c.id === currentChatId);
+    if (!chat || chat.type !== 'group') return;
+    chat.name = name.trim() || buildGroupName(chat.memberRoleIds);
+    saveChatData();
+    document.getElementById('chat-title-name').innerText = chat.name;
+    renderChatList();
+}
+
+function addGroupMember() {
+    const chat = chats.find(c => c.id === currentChatId);
+    const select = document.getElementById('group-add-member-select');
+    if (!chat || chat.type !== 'group' || !select.value) return;
+    if (!chat.memberRoleIds.includes(select.value)) chat.memberRoleIds.push(select.value);
+    if (!chat.name) chat.name = buildGroupName(chat.memberRoleIds);
+    saveChatData();
+    initSidebarValues();
+    document.getElementById('chat-title-name').innerText = chat.name || buildGroupName(chat.memberRoleIds);
+}
+
+function removeGroupMember(roleId) {
+    const chat = chats.find(c => c.id === currentChatId);
+    if (!chat || chat.type !== 'group') return;
+    if (chat.memberRoleIds.length <= 2) {
+        alert('群聊至少保留 2 个成员');
+        return;
+    }
+    chat.memberRoleIds = chat.memberRoleIds.filter(id => id !== roleId);
+    saveChatData();
+    initSidebarValues();
+}
+
+function openMentionModal() {
+    const chat = chats.find(c => c.id === currentChatId);
+    if (!chat || chat.type !== 'group') return;
+    const list = document.getElementById('mention-role-list');
+    list.innerHTML = "";
+    getGroupMembers(chat).forEach(role => {
+        const item = document.createElement('div');
+        item.className = 'mention-role-option';
+        item.onclick = () => insertMention(role);
+        item.innerHTML = `
+            <img src="${escapeChatHTML(role.avatar || '')}">
+            <span>${escapeChatHTML(role.name || role.id)}</span>
+        `;
+        list.appendChild(item);
+    });
+    document.getElementById('mention-modal').classList.remove('hidden');
+}
+
+function closeMentionModal() {
+    document.getElementById('mention-modal').classList.add('hidden');
+}
+
+function insertMention(role) {
+    const input = document.getElementById('chat-input');
+    const mention = `@${role.name} `;
+    const start = input.selectionStart || input.value.length;
+    const end = input.selectionEnd || input.value.length;
+    input.value = input.value.slice(0, start) + mention + input.value.slice(end);
+    input.focus();
+    input.selectionStart = input.selectionEnd = start + mention.length;
+    autoResizeInput(input);
+    closeMentionModal();
 }
 
 function clearChatHistory() {

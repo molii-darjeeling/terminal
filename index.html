@@ -14,6 +14,7 @@
     
     <!-- Manifest (安卓/PWA 配置) -->
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="data:,">
     
     <!-- iOS Icon (苹果手机专用图标配置) -->
     <link rel="apple-touch-icon" href="https://files.catbox.moe/pq5tub.jpg">
@@ -347,7 +348,10 @@
         <div class="sys-top-bar" style="justify-content: space-between; padding: 0 15px;">
             <div class="back-arrow" onclick="backToMenu()">◀</div>
             <span>消息 MESSAGES</span>
-            <div style="font-size:1.5rem; cursor:pointer;" onclick="openNewChatModal()">+</div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="font-size:1.3rem; cursor:pointer;" onclick="openGroupCreateModal()">群</div>
+                <div style="font-size:1.5rem; cursor:pointer;" onclick="openNewChatModal()">+</div>
+            </div>
         </div>
         <div class="sys-content-scroll">
             <div id="chat-list-container" class="sub-page-container" style="padding:0;">
@@ -393,7 +397,16 @@
 
                 <!-- 转账 -->
                 <img src="https://files.catbox.moe/8m9vme.png" class="tool-icon" onclick="openTransferModal()" style="margin: 0; width: 28px; height: 28px; cursor: pointer; object-fit: contain;">
+
+                <!-- 图片 -->
+                <button class="chat-image-tool-btn" type="button" onclick="document.getElementById('chat-image-upload').click()" aria-label="发送图片">
+                    <span class="chat-image-tool-sun"></span>
+                    <span class="chat-image-tool-mountain"></span>
+                </button>
+                <input type="file" id="chat-image-upload" class="hidden" accept="image/*" onchange="handleChatImageUpload(this)">
             </div>
+
+            <div id="chat-reply-preview" class="chat-reply-preview hidden"></div>
 
             <!-- 输入行 -->
             <div class="chat-input-row">
@@ -404,6 +417,7 @@
                 <div class="chat-action-btn send-btn" onclick="sendUserMessage()">
                     <img src="https://files.catbox.moe/4s5ch3.png">
                 </div>
+                <button id="group-mention-btn" class="group-mention-btn hidden" type="button" onclick="openMentionModal()">@</button>
             </div>
         </div>
 
@@ -415,6 +429,9 @@
                 <div class="sidebar-item">
                     <label>🎭 当前身份 (User)</label>
                     <select id="chat-user-select" class="sys-select"></select>
+                </div>
+                <div id="dm-group-section" class="sidebar-item">
+                    <button class="sys-btn-outline" style="width:100%; padding:8px;" onclick="openGroupCreateModal(true)">拉群聊</button>
                 </div>
                 <div class="sidebar-item">
                     <label>回复语言</label>
@@ -432,6 +449,15 @@
                         </div>
                         <div id="wb-dropdown-list" class="hidden" style="position:absolute; top:100%; left:0; width:100%; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #ddd; border-top:none; border-radius:0 0 6px 6px; z-index:100; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
                         </div>
+                    </div>
+                </div>
+                <div id="group-sidebar-section" class="sidebar-item hidden" style="border-top:1px dashed #ddd; padding-top:10px;">
+                    <label>群聊成员</label>
+                    <input type="text" id="group-name-input" class="sys-input" placeholder="群聊名称" onchange="saveGroupName(this.value)">
+                    <div id="group-member-list" class="group-member-list"></div>
+                    <div style="display:flex; gap:6px; margin-top:8px;">
+                        <select id="group-add-member-select" class="sys-select"></select>
+                        <button class="sys-btn" style="width:auto; margin-top:0; padding:8px 10px;" onclick="addGroupMember()">拉人</button>
                     </div>
                 </div>
                 <div class="sidebar-item" style="border-top:1px dashed #ddd; padding-top:10px; margin-top:10px;">
@@ -468,6 +494,10 @@
         <div class="floating-menu-item" onclick="copyMsg(event)">
             <span>📄</span>
             <span>复制</span>
+        </div>
+        <div class="floating-menu-item" onclick="replyMsg()">
+            <span>💬</span>
+            <span>回复</span>
         </div>
         <div class="floating-menu-item" onclick="editMsg()">
             <span>✏️</span>
@@ -608,58 +638,29 @@
         </div>
     </div>
 
-    <div id="sticker-desc-modal" class="modal-overlay hidden">
-        <div class="reply-box">
-            <h3>😊 添加表情包</h3>
-            <div style="text-align:center; margin-bottom:10px;">
-                <img id="sticker-preview-img" src="" style="max-height:100px; border-radius:4px;">
-            </div>
-            <div class="sys-form-group">
-                <label>表情描述 (Prompt)</label>
-                <input type="text" id="sticker-desc-input" class="sys-input" placeholder="例如：惊讶，大哭...">
-                <small style="color:#666;">AI 将“看”到这段文字</small>
-            </div>
-            <div class="reply-actions">
-                <button class="btn-cancel" onclick="document.getElementById('sticker-desc-modal').classList.add('hidden')">取消</button>
-                <button class="btn-send" onclick="confirmStickerUpload()">确认添加</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="transfer-modal" class="modal-overlay hidden" onclick="closeTransferModal()">
+    <div id="group-create-modal" class="modal-overlay hidden" onclick="closeGroupCreateModal()">
         <div class="reply-box" onclick="event.stopPropagation()">
-            <h3>转账</h3>
+            <h3>创建群聊</h3>
             <div class="sys-form-group">
-                <label>金额（USD）</label>
-                <input type="number" id="transfer-amount-input" class="sys-input" placeholder="0.00" min="0" step="0.01">
+                <label>群聊名称</label>
+                <input type="text" id="group-create-name" class="sys-input" placeholder="例如：作战闲聊群">
             </div>
             <div class="sys-form-group">
-                <label>备注（选填）</label>
-                <input type="text" id="transfer-note-input" class="sys-input" placeholder="例如：咖啡钱">
+                <label>选择成员</label>
+                <div id="group-create-role-list" class="group-create-role-list"></div>
             </div>
             <div class="reply-actions">
-                <button class="btn-cancel" onclick="closeTransferModal()">取消</button>
-                <button class="btn-send" onclick="sendTransferMessage()">确定</button>
+                <button class="btn-cancel" onclick="closeGroupCreateModal()">取消</button>
+                <button class="btn-send" onclick="createGroupChat()">创建</button>
             </div>
         </div>
     </div>
 
-    <div id="ledger-entry-modal" class="modal-overlay hidden" onclick="closeLedgerEntryModal()">
-        <div class="reply-box ledger-entry-box" onclick="event.stopPropagation()">
-            <h3 id="ledger-entry-title">记录支出</h3>
-            <div class="sys-form-group">
-                <label>金额</label>
-                <input type="number" id="ledger-amount-input" class="sys-input" placeholder="0.00" min="0" step="0.01">
-            </div>
-            <div class="sys-form-group">
-                <label>备注（选填）</label>
-                <input type="text" id="ledger-note-input" class="sys-input" placeholder="例如：午饭">
-            </div>
+    <div id="mention-modal" class="modal-overlay hidden" onclick="closeMentionModal()">
+        <div class="reply-box" onclick="event.stopPropagation()">
+            <h3>@ 成员</h3>
+            <div id="mention-role-list" class="mention-role-list"></div>
             <div class="reply-actions">
-                <button class="btn-cancel" onclick="closeLedgerEntryModal()">取消</button>
-                <button class="btn-send" onclick="confirmLedgerEntry()">确定</button>
+                <button class="btn-cancel" onclick="closeMentionModal()">取消</button>
             </div>
-        </div>
-    </div>
-</body>
-</html>
+
