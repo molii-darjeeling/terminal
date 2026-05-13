@@ -104,6 +104,7 @@ let tempStickerFile = null;
 let chatAbortController = null;
 let pendingReplyTo = null;
 let transferMode = 'transfer';
+let pendingReceiveTransferId = null;
 
 let longPressTimer;
 let longPressTargetChatId = null;
@@ -846,12 +847,14 @@ function renderMessages() {
                 </div>
             `;
         } else if (msg.type === 'transfer' || msg.type === 'redpacket') {
+            const canReceiveTransfer = msg.type === 'transfer' && canUserReceiveTransfer(msg, chat);
+            const cardClickAttr = canReceiveTransfer ? ` onclick="openTransferReceiveModal(event, '${escapeChatHTML(msg.id)}')"` : '';
             innerHTMLContent = `
                 <div style="display:flex; align-items:flex-end; gap:5px;">
                     ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                     <div>
                         ${chat.type === 'group' && !isMe && msgRole ? `<div class="group-sender-name">${escapeChatHTML(msgRole.name)}</div>` : ''}
-                        <div class="chat-bubble-content ${msg.type === 'redpacket' ? 'redpacket-card' : 'transfer-card'} ${targetClass}">${replyQuoteHTML}${bubbleContent}</div>
+                        <div class="chat-bubble-content ${msg.type === 'redpacket' ? 'redpacket-card' : 'transfer-card'} ${canReceiveTransfer ? 'transfer-card-receivable' : ''} ${targetClass}"${cardClickAttr}>${replyQuoteHTML}${bubbleContent}</div>
                     </div>
                     ${!isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                 </div>
@@ -1204,6 +1207,45 @@ function openTransferModal() {
 function closeTransferModal() {
     document.getElementById('transfer-modal').classList.add('hidden');
 }
+
+function openTransferReceiveModal(e, msgId) {
+    if (e) {
+        e.stopPropagation();
+        if (window.globalLongPressActive) return;
+    }
+    const chat = normalizeChat(chats.find(c => c.id === currentChatId));
+    if (!chat) return;
+    const msg = chat.messages.find(m => m.id === msgId && m.type === 'transfer');
+    if (!msg || !canUserReceiveTransfer(msg, chat)) return;
+    const senderRole = msg.roleId ? roles.find(r => r.id === msg.roleId) : getChatRole(chat);
+    pendingReceiveTransferId = msgId;
+    document.getElementById('receive-transfer-sender').innerText = senderRole ? senderRole.name : '对方';
+    document.getElementById('receive-transfer-amount').innerText = `$${formatTransferAmount(msg.amount)} USD`;
+    document.getElementById('receive-transfer-note').innerText = msg.note || '没有备注';
+    document.getElementById('transfer-receive-modal').classList.remove('hidden');
+}
+
+function closeTransferReceiveModal() {
+    pendingReceiveTransferId = null;
+    document.getElementById('transfer-receive-modal')?.classList.add('hidden');
+}
+
+function confirmReceiveTransfer() {
+    if (!pendingReceiveTransferId) return;
+    const chat = normalizeChat(chats.find(c => c.id === currentChatId));
+    if (!chat) return;
+    const msg = chat.messages.find(m => m.id === pendingReceiveTransferId && m.type === 'transfer');
+    if (msg && canUserReceiveTransfer(msg, chat)) {
+        msg.accepted = true;
+        msg.acceptedAt = Date.now();
+        msg.acceptedBy = 'user';
+        saveChatData();
+        renderMessages();
+        showToast('已接收转账');
+    }
+    closeTransferReceiveModal();
+}
+
 function setTransferMode(mode) {
     transferMode = mode === 'redpacket' ? 'redpacket' : 'transfer';
     const isRed = transferMode === 'redpacket';
@@ -1650,11 +1692,25 @@ function renderTransferCardBody(msg, isMe, role, chatUser) {
     const name = isMe ? (targetRole || role ? (targetRole || role).name : '对方') : (targetRole ? targetRole.name : (chatUser ? chatUser.name : '你'));
     const label = isMe ? `转账给 ${name}` : `转账给 ${name}`;
     const note = msg.note ? `<div class="transfer-card-note">${escapeChatHTML(msg.note)}</div>` : '';
+    const status = getTransferStatusText(msg, isMe, targetRole);
     return `
         <div class="transfer-card-label">${escapeChatHTML(label)}</div>
         <div class="transfer-card-amount">$${formatTransferAmount(msg.amount)}<span class="transfer-card-currency">USD</span></div>
         ${note}
+        <div class="transfer-card-status">${escapeChatHTML(status)}</div>
     `;
+}
+
+function canUserReceiveTransfer(msg, chat) {
+    if (!msg || msg.type !== 'transfer' || msg.sender === 'user' || msg.accepted) return false;
+    if (chat && chat.type === 'group' && msg.targetRoleId) return false;
+    return true;
+}
+
+function getTransferStatusText(msg, isMe, targetRole) {
+    if (msg.sender !== 'user' && !targetRole) return msg.accepted ? '已接收' : '点击接收';
+    if (msg.sender !== 'user' && targetRole) return '已送达';
+    return targetRole ? '已发送' : '已发送';
 }
 
 function renderRedPacketCardBody(msg, isMe, role, chatUser) {
@@ -1677,7 +1733,8 @@ function formatTransferText(msg, role) {
     const targetRole = msg.targetRoleId ? roles.find(r => r.id === msg.targetRoleId) : null;
     const direction = msg.sender === 'user' ? `转账给${targetRole ? targetRole.name : (role ? role.name : '对方')}` : `转账给${targetRole ? targetRole.name : '你'}`;
     const note = msg.note ? `，备注：${msg.note}` : '';
-    return `[${direction}] $${formatTransferAmount(msg.amount)} USD${note}`;
+    const status = msg.accepted ? '，状态：已接收' : (msg.sender === 'user' ? '，状态：已发送' : '，状态：待接收');
+    return `[${direction}] $${formatTransferAmount(msg.amount)} USD${note}${status}`;
 }
 
 function formatRedPacketText(msg, forAI = false) {

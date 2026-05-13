@@ -528,6 +528,56 @@ input, textarea, select {
 .chat-list-name { font-weight: bold; font-size: 1rem; color: var(--text-primary); margin-bottom: 4px; }
 .chat-list-preview { color: #888; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-list-time { font-size: 0.75rem; color: #bbb; margin-left: 10px; flex-shrink: 0; }
+.chat-list-group-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(255,255,255,0.32);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.12);
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.chat-list-group-btn:active {
+    transform: scale(0.96);
+    background: rgba(255,255,255,0.2);
+}
+.group-icon-person {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+}
+.group-icon-person::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 11px;
+    width: 18px;
+    height: 9px;
+    border: 2px solid #fff;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    border-bottom: none;
+    transform: translateX(-50%);
+}
+.group-icon-person-main {
+    left: 6px;
+    top: 5px;
+}
+.group-icon-person-side {
+    right: 5px;
+    top: 8px;
+    width: 11px;
+    height: 11px;
+    opacity: 0.78;
+}
+.group-icon-person-side::after {
+    top: 9px;
+    width: 15px;
+    height: 7px;
+}
 
 /* 2. Chat Room Container */
 .chat-msg-container {
@@ -1075,6 +1125,56 @@ input, textarea, select {
     letter-spacing: 0;
     opacity: 0.7;
     margin-left: 4px;
+}
+.transfer-card-status {
+    margin-top: 9px;
+    padding-top: 7px;
+    border-top: 1px solid rgba(96,111,132,0.18);
+    font-size: 0.72rem;
+    font-weight: bold;
+    color: rgba(38,56,79,0.62);
+}
+.left .transfer-card-status {
+    color: rgba(79,60,43,0.64);
+    border-top-color: rgba(120,91,63,0.18);
+}
+.transfer-card-receivable {
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(42,63,92,0.12);
+}
+.transfer-card-receivable .transfer-card-status {
+    color: #456a96;
+}
+.transfer-receive-box {
+    max-width: 330px;
+}
+.transfer-receive-card {
+    border-radius: 14px;
+    padding: 18px 16px;
+    background: linear-gradient(180deg, #f8fafc, #e9eff6);
+    border: 1px solid #cbd6e4;
+    color: #26384f;
+    margin-bottom: 14px;
+}
+.transfer-receive-label {
+    font-size: 0.8rem;
+    font-weight: bold;
+    opacity: 0.72;
+}
+.transfer-receive-amount {
+    margin-top: 8px;
+    font-size: 1.75rem;
+    font-weight: bold;
+    letter-spacing: 0;
+}
+.transfer-receive-meta {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: rgba(38,56,79,0.68);
+    word-break: break-word;
 }
 .transfer-mode-row {
     display: grid;

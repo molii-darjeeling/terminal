@@ -20,7 +20,7 @@
     <link rel="apple-touch-icon" href="https://files.catbox.moe/pq5tub.jpg">
 
     <!-- 引用外部样式表 -->
-    <link rel="stylesheet" href="style.css?v=20260513-9">
+    <link rel="stylesheet" href="style.css?v=20260513-10">
 
     <!-- 针对本次修改要求的样式覆盖 -->
     <style>
@@ -386,7 +386,10 @@
             <div class="back-arrow" onclick="backToMenu()">◀</div>
             <span>消息 MESSAGES</span>
             <div style="display:flex; align-items:center; gap:12px;">
-                <div style="font-size:1.3rem; cursor:pointer;" onclick="openGroupCreateModal()">群</div>
+                <button type="button" class="chat-list-group-btn" onclick="openGroupCreateModal()" aria-label="创建群聊">
+                    <span class="group-icon-person group-icon-person-main"></span>
+                    <span class="group-icon-person group-icon-person-side"></span>
+                </button>
                 <div style="font-size:1.5rem; cursor:pointer;" onclick="openNewChatModal()">+</div>
             </div>
         </div>
@@ -654,11 +657,11 @@
         <div>生成中，请稍后…</div>
     </div>
 
-    <script src="data.js?v=20260513-9"></script>
-    <script src="sns.js?v=20260513-9"></script>
-    <script src="chat.js?v=20260513-9"></script>
-    <script src="ledger.js?v=20260513-9"></script>
-    <script src="fortune.js?v=20260513-9"></script>
+    <script src="data.js?v=20260513-10"></script>
+    <script src="sns.js?v=20260513-10"></script>
+    <script src="chat.js?v=20260513-10"></script>
+    <script src="ledger.js?v=20260513-10"></script>
+    <script src="fortune.js?v=20260513-10"></script>
     
     <!-- CHAT 基础弹窗 -->
     <div id="new-chat-modal" class="modal-overlay hidden">
@@ -747,6 +750,23 @@
             <div class="reply-actions">
                 <button class="btn-cancel" onclick="closeTransferModal()">取消</button>
                 <button class="btn-send" onclick="sendTransferMessage()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="transfer-receive-modal" class="modal-overlay hidden" onclick="closeTransferReceiveModal()">
+        <div class="reply-box transfer-receive-box" onclick="event.stopPropagation()">
+            <div class="transfer-receive-card">
+                <div class="transfer-receive-label">接收转账</div>
+                <div id="receive-transfer-amount" class="transfer-receive-amount">$0 USD</div>
+                <div class="transfer-receive-meta">
+                    <span id="receive-transfer-sender">对方</span>
+                    <span id="receive-transfer-note">没有备注</span>
+                </div>
+            </div>
+            <div class="reply-actions">
+                <button class="btn-cancel" onclick="closeTransferReceiveModal()">取消</button>
+                <button class="btn-send" onclick="confirmReceiveTransfer()">接收</button>
             </div>
         </div>
     </div>
