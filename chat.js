@@ -73,7 +73,7 @@ const GROUP_VIBE_PROMPT = `
 6. 不要自问自答，不要把所有可能反应都写满。像真实手机群聊，不像舞台对白。
 
 【红包领取规则（严守）】
-- [CHAT HISTORY] 会写明红包的领取记录。只有领取记录里出现了自己名字的角色，才可以说“我抢到了/我领到了/谢谢红包”。
+- [CHAT HISTORY] 会写明红包的领取记录，例如“某人领到$1（1/3，剩2个）”。只有领取记录里出现了自己名字的角色，才可以说“我抢到了/我领到了/谢谢红包”。
 - 没有出现在领取记录里的角色，绝对不能假装自己抢到了红包；只能说“没抢到”“还有吗”“手慢了”等。
 - 发送 [红包] 指令只是发红包，不等于自己领取红包。
 `;
@@ -1348,7 +1348,7 @@ async function triggerChatGen() {
         } else if (m.type === 'transfer') {
             content = formatTransferText(m, role);
         } else if (m.type === 'redpacket') {
-            content = formatRedPacketText(m);
+            content = formatRedPacketText(m, true);
         } else {
             content = m.content;
         }
@@ -1506,7 +1506,7 @@ async function triggerGroupChatGen(chat, btnImg, iconIdle, iconStop) {
         else if (m.type === 'sticker') content = `[发了一个表情包: ${m.desc || '图片'}]`;
         else if (m.type === 'image') content = `[发了一张图片: ${m.desc || '图片'}]`;
         else if (m.type === 'transfer') content = formatTransferText(m, roles.find(r => r.id === m.roleId));
-        else if (m.type === 'redpacket') content = formatRedPacketText(m);
+        else if (m.type === 'redpacket') content = formatRedPacketText(m, true);
         return `[${m.id}] ${speaker}${getReplyPromptLine(m)}: ${content}`;
     }).join("\n");
 
@@ -1557,7 +1557,7 @@ No matter what language the user uses, all members must reply only in ${replyLan
     document.getElementById('chat-title-status').innerText = "";
 
     if (!aiResponse) return;
-    const parts = aiResponse.split("@@SPLIT@@").map(p => p.trim()).filter(Boolean);
+    const parts = extractGroupAIMessageParts(aiResponse);
     for (let i = 0; i < parts.length; i++) {
         const parsed = parseGroupAIMessage(parts[i], chat);
         if (!parsed || !parsed.roleId || !parsed.content) continue;
@@ -1676,14 +1676,22 @@ function formatTransferText(msg, role) {
     return `[${direction}] $${formatTransferAmount(msg.amount)} USD${note}`;
 }
 
-function formatRedPacketText(msg) {
+function formatRedPacketText(msg, forAI = false) {
     const note = msg.note ? `，留言：${msg.note}` : '';
     const claims = msg.claims || [];
     const claimed = claims.length;
+    const total = Number(msg.count) || 0;
+    const remain = Math.max(0, total - claimed);
+    if (forAI) {
+        const claimText = claims.length
+            ? `，领取记录：${claims.map((c, idx) => `${c.name}领到$${formatTransferAmount(c.amount)}（${idx + 1}/${total}，剩${Math.max(0, total - idx - 1)}个）`).join('；')}`
+            : `，领取记录：暂无（0/${total}，剩${remain}个）`;
+        return `[红包] $${formatTransferAmount(msg.totalAmount)} USD，共${total}个，已领${claimed}个，剩${remain}个${note}${claimText}`;
+    }
     const claimText = claims.length
         ? `，领取记录：${claims.map(c => `${c.name}领到$${formatTransferAmount(c.amount)}`).join('；')}`
         : '，领取记录：暂无';
-    return `[红包] $${formatTransferAmount(msg.totalAmount)} USD，共${msg.count}个，已领${claimed}个${note}${claimText}`;
+    return `[红包] $${formatTransferAmount(msg.totalAmount)} USD，共${total}个，已领${claimed}个${note}${claimText}`;
 }
 
 function formatTransferAmount(amount) {
@@ -1774,15 +1782,44 @@ function parseGroupAIMessage(text, chat) {
     const match = raw.match(/^@@MSG:(.*?)@@([\s\S]*)$/);
     if (!match) {
         const fallback = getGroupMembers(chat)[0];
-        const parsedReply = parseAIReplyPrefix(raw.replace(/^[-:：\s]+/, ''), chat);
+        const parsedReply = parseAIReplyPrefix(stripLeakedGroupMarkers(raw.replace(/^[-:：\s]+/, '')));
         return fallback ? { roleId: fallback.id, content: parsedReply.content, replyTo: parsedReply.replyTo } : null;
     }
     let roleId = match[1].trim();
     if (!roleId.startsWith('@')) roleId = '@' + roleId.replace(/^@/, '');
     const allowed = getGroupMembers(chat).find(r => r.id === roleId);
     if (!allowed) return null;
-    const parsedReply = parseAIReplyPrefix(match[2].trim(), chat);
+    const parsedReply = parseAIReplyPrefix(stripLeakedGroupMarkers(match[2].trim()), chat);
     return { roleId, content: parsedReply.content, replyTo: parsedReply.replyTo };
+}
+
+function extractGroupAIMessageParts(text) {
+    const raw = String(text || '').trim();
+    if (!raw.includes('@@MSG:')) {
+        return raw.split('@@SPLIT@@').map(p => p.trim()).filter(Boolean);
+    }
+    const parts = [];
+    const regex = /@@MSG:([\s\S]*?)@@([\s\S]*?)(?=@@MSG:|$)/g;
+    let match;
+    while ((match = regex.exec(raw)) !== null) {
+        const roleId = match[1].trim();
+        const body = match[2]
+            .replace(/^@@SPLIT@@/, '')
+            .replace(/@@SPLIT@@$/g, '')
+            .trim();
+        if (!roleId || !body) continue;
+        body.split('@@SPLIT@@').map(p => p.trim()).filter(Boolean).forEach(chunk => {
+            parts.push(`@@MSG:${roleId}@@${chunk}`);
+        });
+    }
+    return parts;
+}
+
+function stripLeakedGroupMarkers(text) {
+    return String(text || '')
+        .replace(/@@MSG:[\s\S]*?@@/g, '')
+        .replace(/@@SPLIT@@/g, '')
+        .trim();
 }
 
 function extractMentionIds(text, chat) {
