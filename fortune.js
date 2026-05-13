@@ -29,16 +29,23 @@ const SAGE_FORTUNE_CARDS = [
 
 let fortuneSelectedCard = null;
 let fortuneBusy = false;
+let fortuneSettings = {
+    language: 'zh',
+    realContext: ''
+};
 
 document.addEventListener('DOMContentLoaded', () => {
+    loadFortuneSettings();
     if (document.getElementById('fortune-card-area')) resetFortuneReading();
 });
 
 function enterFortune() {
+    loadFortuneSettings();
     document.querySelectorAll('.system-page, .sns-page').forEach(el => el.classList.add('hidden'));
     const bottomBar = document.getElementById('bottom-bar');
     if (bottomBar) bottomBar.classList.add('hidden');
     document.getElementById('fortune-page').classList.remove('hidden');
+    initFortuneSidebar();
     resetFortuneReading();
 }
 
@@ -56,7 +63,7 @@ function resetFortuneReading() {
     const currentUser = getFortuneUserName();
     const speech = document.getElementById('fortune-speech');
     if (speech) {
-        speech.innerText = `${currentUser}さん、今日の運勢を見てみましょうか？僕に任せてくださいね。心を落ち着けて……好きなタイミングでカードを1枚選んでください。\n（${currentUser}，要看看今天的运势吗？请交给我吧。请平复心情……在喜欢的时机选一张牌吧。）`;
+        speech.innerText = getFortuneLine('intro', currentUser);
     }
 
     const result = document.getElementById('fortune-result');
@@ -95,7 +102,7 @@ async function selectFortuneCard(index) {
             card.classList.add('fortune-selected');
             const loading = document.createElement('div');
             loading.className = 'fortune-loading';
-            loading.innerText = 'Sageがカードを読んでいます…\n(Sage正在解读卡牌…)';
+            loading.innerText = getFortuneLine('loading');
             card.appendChild(loading);
         } else {
             card.classList.add('fortune-faded');
@@ -104,7 +111,7 @@ async function selectFortuneCard(index) {
 
     const speech = document.getElementById('fortune-speech');
     if (speech) {
-        speech.innerText = '……はい、このカードですね。少しだけ、カードの声を聞いてみます。\n（……好的，是这张牌呢。我来稍微倾听一下卡牌的声音。）';
+        speech.innerText = getFortuneLine('selected');
     }
 
     const reading = await generateFortuneReading(fortuneSelectedCard);
@@ -115,6 +122,8 @@ async function selectFortuneCard(index) {
 async function generateFortuneReading(card) {
     const currentUser = getFortuneUserName();
     const today = new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'long' });
+    const languageName = fortuneSettings.language === 'ja' ? 'Japanese' : 'Simplified Chinese';
+    const realContext = fortuneSettings.realContext ? `[User Real-Life Context]\n${fortuneSettings.realContext}` : '[User Real-Life Context]\nNot specified. Keep it broad and light.';
     const prompt = `
 あなたはセイジ・スカイフォールとして、ユーザーの今日の運勢をタロット風に占います。
 
@@ -153,6 +162,7 @@ async function generateFortuneReading(card) {
 ${card.emoji} ${card.name}
 Theme: ${card.theme}
 Date: ${today}
+${realContext}
 
 [Fortune Generation Rules]
 1. Diversity (多樣化): 占卜内容请围绕以下但不限于领域展开：
@@ -165,9 +175,8 @@ Date: ${today}
 3. Negative Cards (负面牌的柔化): 如果抽到剑或雷，请将其转化为“微小无害的波折”，例如：突然忘了要说什么、打字错别字、工作时短暂犯困等，并立刻给出温暖的建议（如深呼吸、摸鱼喝水），结局必须是让人安心的。
 
 [Format Requirements]
+- Output only in ${languageName}.
 - 总长度不超过3-4行。
-- 必须是【一句日文，紧接着括号内是对应的中文翻译】交替进行。绝对不要把日文全写完再写中文。
-- 示例：今日も一日、お仕事お疲れ様です。（今天一天的工作也辛苦了。）
 - 不要使用任何标题（如“占い結果”）。不要提及这些规则。
 `;
 
@@ -176,7 +185,7 @@ Date: ${today}
         try {
             response = await callAI([
                 { role: 'system', content: prompt },
-                { role: 'user', content: `${currentUser}さんの今日の運勢を、セイジの口調で占って、日文和中文翻译交替输出。` }
+                { role: 'user', content: `${currentUser}さんの今日の運勢を、セイジの口調で${languageName}だけで占ってください。` }
             ]);
         } catch (e) {
             console.error("AI Fortune Error:", e);
@@ -197,7 +206,7 @@ function revealFortuneCard(cardEl, card, reading) {
 
     const speech = document.getElementById('fortune-speech');
     if (speech) {
-        speech.innerText = 'ふふ、今日のカードが開きました。無理せず、少しだけ楽しい一日にしましょう。\n（呵呵，今天的牌翻开了。不要勉强自己，让今天成为稍微开心一点的一天吧。）';
+        speech.innerText = getFortuneLine('revealed');
     }
 
     const result = document.getElementById('fortune-result');
@@ -215,6 +224,16 @@ function sanitizeFortuneReading(text) {
 }
 
 function buildFallbackFortune(card, currentUser) {
+    if (fortuneSettings.language === 'zh') {
+        const introsZh = [
+            `今天抽到的是「${card.name}」哦，${currentUser}。`,
+            `呵呵，这张牌是「${card.name}」呢。`,
+            `指引${currentUser}今天的小牌，是「${card.name}」。`
+        ];
+        const middleZh = `它提示的是${card.theme.split('、')[0]}。今天不用想太重，先从一件小事开始就很好。`;
+        const outroZh = `如果中途有点累，就休息一下。Sage会在这里温柔地给你应援。`;
+        return `${introsZh[Math.floor(Math.random() * introsZh.length)]}\n${middleZh}\n${outroZh}`;
+    }
     // 随机开场白
     const intros = [
         `今日は「${card.name}」のカードが出ましたよ、${currentUser}さん。（今天抽到了「${card.name}」牌哦，${currentUser}。）`,
@@ -246,6 +265,62 @@ function buildFallbackFortune(card, currentUser) {
     const outro = outros[Math.floor(Math.random() * outros.length)];
 
     return `${intro}\n${middle}\n${outro}`;
+}
+
+function loadFortuneSettings() {
+    try {
+        const saved = JSON.parse(localStorage.getItem('helios_fortune_settings') || '{}');
+        fortuneSettings = Object.assign(fortuneSettings, saved);
+    } catch (e) {}
+}
+
+function saveFortuneSettings(shouldReset = false) {
+    const lang = document.getElementById('fortune-language');
+    const context = document.getElementById('fortune-real-context');
+    if (lang) fortuneSettings.language = lang.value;
+    if (context) fortuneSettings.realContext = context.value.trim();
+    localStorage.setItem('helios_fortune_settings', JSON.stringify(fortuneSettings));
+    if (shouldReset) resetFortuneReading();
+}
+
+function initFortuneSidebar() {
+    const lang = document.getElementById('fortune-language');
+    const context = document.getElementById('fortune-real-context');
+    if (lang) lang.value = fortuneSettings.language || 'zh';
+    if (context) context.value = fortuneSettings.realContext || '';
+}
+
+function toggleFortuneSidebar() {
+    const sidebar = document.getElementById('fortune-sidebar');
+    const overlay = document.getElementById('fortune-sidebar-overlay');
+    if (!sidebar || !overlay) return;
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('hidden');
+    initFortuneSidebar();
+}
+
+function addFortuneTag(tag) {
+    const context = document.getElementById('fortune-real-context');
+    if (!context) return;
+    const current = context.value.trim();
+    if (!current.includes(tag)) context.value = current ? `${current} / ${tag}` : tag;
+    saveFortuneSettings(false);
+}
+
+function getFortuneLine(type, currentUser = getFortuneUserName()) {
+    const zh = {
+        intro: `${currentUser}，要看看今天的运势吗？请交给我吧。那么，请平复心情……在喜欢的时机选一张牌吧。`,
+        loading: 'Sage正在解读卡牌…',
+        selected: '……好的，是这张牌呢。我来稍微倾听一下卡牌的声音。',
+        revealed: '呵呵，今天的牌翻开了。不要勉强自己，让今天成为稍微开心一点的一天吧。'
+    };
+    const ja = {
+        intro: `${currentUser}さん、今日の運勢を見てみましょうか？僕に任せてくださいね。心を落ち着けて……好きなタイミングでカードを1枚選んでください。`,
+        loading: 'Sageがカードを読んでいます…',
+        selected: '……はい、このカードですね。少しだけ、カードの声を聞いてみます。',
+        revealed: 'ふふ、今日のカードが開きました。無理せず、少しだけ楽しい一日にしましょう。'
+    };
+    return (fortuneSettings.language === 'ja' ? ja : zh)[type];
 }
 
 function getFortuneUserName() {

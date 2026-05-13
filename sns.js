@@ -1,14 +1,66 @@
 // --- SNS Core Logic ---
+let snsSettings = { language: 'zh' };
+
+function loadSnsSettings() {
+    try {
+        snsSettings = Object.assign(snsSettings, JSON.parse(localStorage.getItem('helios_sns_settings') || '{}'));
+    } catch (e) {}
+}
+
+document.addEventListener('click', (e) => {
+    const menu = document.getElementById('sns-settings-menu');
+    if (!menu || menu.classList.contains('hidden')) return;
+    if (!menu.contains(e.target) && !e.target.closest('.sns-menu-btn')) menu.classList.add('hidden');
+});
+
+function saveSnsSettings() {
+    localStorage.setItem('helios_sns_settings', JSON.stringify(snsSettings));
+}
+
+function getSnsLanguageName() {
+    return snsSettings.language === 'ja' ? 'Japanese' : 'Simplified Chinese';
+}
 
 function enterSNS() {
+    loadSnsSettings();
     document.querySelectorAll('.system-page').forEach(el => el.classList.add('hidden'));
     document.getElementById('feed-page').classList.remove('hidden');
     document.getElementById('bottom-bar').classList.remove('hidden');
     document.getElementById('btn-post-trigger').classList.remove('hidden');
     document.getElementById('btn-back-trigger').classList.add('hidden');
     applyUserInfoToSNS();
+    initSnsMenu();
     renderFeed();
     document.getElementById('feed-container').scrollTop = 0;
+}
+
+function initSnsMenu() {
+    const select = document.getElementById('sns-language-select');
+    if (select) select.value = snsSettings.language || 'zh';
+}
+
+function toggleSnsMenu(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('sns-settings-menu');
+    if (!menu) return;
+    menu.classList.toggle('hidden');
+    initSnsMenu();
+}
+
+function setSnsLanguage(value) {
+    snsSettings.language = value || 'zh';
+    saveSnsSettings();
+}
+
+function clearUnfavPosts() {
+    if (!confirm("确定清空所有未收藏的朋友圈动态吗？收藏的帖子会保留。")) return;
+    posts = posts.filter(p => p.isFav);
+    currentPostId = null;
+    saveAllData();
+    document.getElementById('sns-settings-menu')?.classList.add('hidden');
+    renderFeed();
+    if (typeof showToast === 'function') showToast('已清空未收藏动态');
+    else alert('已清空未收藏动态');
 }
 
 function exitSNS() {
@@ -65,6 +117,7 @@ async function generateMultiPosts() {
 
 async function generateAIPostWithChain(authorRole, allEnabledRoles) {
     const worldInfo = getWorldContext();
+    const languageName = getSnsLanguageName();
     const now = new Date();
     const timeString = `${now.getHours()}:${now.getMinutes().toString().padStart(2,'0')}`;
     const fullDate = getDetailedDate();
@@ -109,6 +162,8 @@ async function generateAIPostWithChain(authorRole, allEnabledRoles) {
     Current User Info: ${user.name} (${user.id}) Persona: ${user.persona}
     [POTENTIAL COMMENTERS]
     ${commentersInfo}
+    [LANGUAGE]
+    Write the post and comments only in ${languageName}.
 
     [TASK]
     1. Write a short SNS post (max 100 chars) as the Current Actor.
@@ -220,6 +275,7 @@ async function summonBatchCommentsForPost(post) {
     const worldInfo = getWorldContext();
     const userInfo = `User: ${user.name} (${user.id}), Persona: ${user.persona}`;
     const threadCtx = getThreadContext(post);
+    const languageName = getSnsLanguageName();
     
     const enabledRoles = roles.filter(r => r.isEnabled !== false);
     
@@ -267,6 +323,8 @@ async function summonBatchCommentsForPost(post) {
     ${threadCtx}
     [AVAILABLE ACTORS]
     ${availableRolesStr}
+    [LANGUAGE]
+    Write all comments only in ${languageName}.
     [TASK]
     Decide how many characters (randomly 1 to 3) will comment now.
     
@@ -420,6 +478,7 @@ async function triggerTargetedAIReply(postUID, userText, targetRole) {
     if(!post) return;
 
     const threadCtx = getThreadContext(post);
+    const languageName = getSnsLanguageName();
     const sysPrompt = `
     ${HUMAN_VIBE_PROMPT}
     ${HELIOS_WORLD_CONFIG}
@@ -432,6 +491,8 @@ async function triggerTargetedAIReply(postUID, userText, targetRole) {
     Persona: ${user.persona}
     [CONTEXT]
     ${getThreadContext(post)}
+    [LANGUAGE]
+    Reply only in ${languageName}.
     [EVENT]
     User (${user.id}) just said to YOU: "${userText}"
     [TASK]

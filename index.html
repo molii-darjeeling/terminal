@@ -100,7 +100,10 @@
         <div class="sys-top-bar fortune-top-bar" style="justify-content: space-between; padding: 0 10px;">
             <div class="back-arrow" onclick="exitFortune()">◀</div>
             <span>Sage的占卜小屋</span>
-            <div class="fortune-reset-btn" onclick="resetFortuneReading()">↻</div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <div class="fortune-reset-btn" onclick="resetFortuneReading()">↻</div>
+                <div class="fortune-reset-btn" onclick="toggleFortuneSidebar()">☰</div>
+            </div>
         </div>
         <div class="fortune-stage">
             <div class="fortune-orbit fortune-orbit-a"></div>
@@ -115,6 +118,31 @@
 
             <div class="fortune-card-area" id="fortune-card-area"></div>
             <div class="fortune-result hidden" id="fortune-result"></div>
+        </div>
+        <div id="fortune-sidebar-overlay" class="chat-sidebar-overlay hidden" onclick="toggleFortuneSidebar()"></div>
+        <div id="fortune-sidebar" class="chat-sidebar fortune-sidebar">
+            <div class="sidebar-header">占卜设置</div>
+            <div class="sidebar-content">
+                <div class="sidebar-item">
+                    <label>回复语言</label>
+                    <select id="fortune-language" class="sys-select" onchange="saveFortuneSettings(true)">
+                        <option value="zh">中文</option>
+                        <option value="ja">日语</option>
+                    </select>
+                </div>
+                <div class="sidebar-item">
+                    <label>真实情况</label>
+                    <textarea id="fortune-real-context" class="sys-textarea" rows="5" placeholder="例如：现实是学生/最近在备考/今天想轻松一点/只是娱乐抽卡..." onchange="saveFortuneSettings()"></textarea>
+                    <div class="fortune-tag-list">
+                        <button type="button" onclick="addFortuneTag('学生')">学生</button>
+                        <button type="button" onclick="addFortuneTag('上班族')">上班族</button>
+                        <button type="button" onclick="addFortuneTag('假期中')">假期中</button>
+                        <button type="button" onclick="addFortuneTag('备考/学习中')">备考</button>
+                        <button type="button" onclick="addFortuneTag('社交低电量')">社交低电量</button>
+                        <button type="button" onclick="addFortuneTag('想抽卡/玩游戏')">抽卡/游戏</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -281,8 +309,17 @@
                     <span class="u-name" id="nav-name-1">USER</span>
                     <span class="u-id" id="nav-id-1">@id</span>
                 </div>
+                <button class="sns-menu-btn" type="button" onclick="toggleSnsMenu(event)">···</button>
             </div>
             <img src="https://files.catbox.moe/gq5aoo.png" class="nav-logo">
+            <div id="sns-settings-menu" class="sns-settings-menu hidden">
+                <label>语言</label>
+                <select id="sns-language-select" class="sys-select" onchange="setSnsLanguage(this.value)">
+                    <option value="zh">中文</option>
+                    <option value="ja">日语</option>
+                </select>
+                <button type="button" class="sys-btn sys-btn-danger" onclick="clearUnfavPosts()">清空未收藏动态</button>
+            </div>
         </div>
 
         <div class="content-scroll-area" id="feed-container"></div>
@@ -663,4 +700,61 @@
             <div class="reply-actions">
                 <button class="btn-cancel" onclick="closeMentionModal()">取消</button>
             </div>
+        </div>
+    </div>
 
+    <div id="sticker-desc-modal" class="modal-overlay hidden">
+        <div class="reply-box">
+            <h3>😊 添加表情包</h3>
+            <div style="text-align:center; margin-bottom:10px;">
+                <img id="sticker-preview-img" src="" style="max-height:100px; border-radius:4px;">
+            </div>
+            <div class="sys-form-group">
+                <label>表情描述 (Prompt)</label>
+                <input type="text" id="sticker-desc-input" class="sys-input" placeholder="例如：惊讶，大哭...">
+                <small style="color:#666;">AI 将“看”到这段文字</small>
+            </div>
+            <div class="reply-actions">
+                <button class="btn-cancel" onclick="document.getElementById('sticker-desc-modal').classList.add('hidden')">取消</button>
+                <button class="btn-send" onclick="confirmStickerUpload()">确认添加</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="transfer-modal" class="modal-overlay hidden" onclick="closeTransferModal()">
+        <div class="reply-box" onclick="event.stopPropagation()">
+            <h3>转账</h3>
+            <div class="sys-form-group">
+                <label>金额（USD）</label>
+                <input type="number" id="transfer-amount-input" class="sys-input" placeholder="0.00" min="0" step="0.01">
+            </div>
+            <div class="sys-form-group">
+                <label>备注（选填）</label>
+                <input type="text" id="transfer-note-input" class="sys-input" placeholder="例如：咖啡钱">
+            </div>
+            <div class="reply-actions">
+                <button class="btn-cancel" onclick="closeTransferModal()">取消</button>
+                <button class="btn-send" onclick="sendTransferMessage()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ledger-entry-modal" class="modal-overlay hidden" onclick="closeLedgerEntryModal()">
+        <div class="reply-box ledger-entry-box" onclick="event.stopPropagation()">
+            <h3 id="ledger-entry-title">记录支出</h3>
+            <div class="sys-form-group">
+                <label>金额</label>
+                <input type="number" id="ledger-amount-input" class="sys-input" placeholder="0.00" min="0" step="0.01">
+            </div>
+            <div class="sys-form-group">
+                <label>备注（选填）</label>
+                <input type="text" id="ledger-note-input" class="sys-input" placeholder="例如：午饭">
+            </div>
+            <div class="reply-actions">
+                <button class="btn-cancel" onclick="closeLedgerEntryModal()">取消</button>
+                <button class="btn-send" onclick="confirmLedgerEntry()">确定</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

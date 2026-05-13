@@ -198,7 +198,9 @@ async function exportData() {
         current_profile_idx: currentProfileIndex,
         roles: localStorage.getItem('helios_roles'),
         posts: localStorage.getItem('helios_posts'),
-        global_worldbooks: JSON.stringify(globalWorldBooks) // [修改 1] 导出包含世界书
+        global_worldbooks: JSON.stringify(globalWorldBooks), // [修改 1] 导出包含世界书
+        fortune_settings: localStorage.getItem('helios_fortune_settings'),
+        sns_settings: localStorage.getItem('helios_sns_settings')
     };
     if (typeof buildChatBackupPayload === 'function') {
         Object.assign(data, await buildChatBackupPayload());
@@ -283,6 +285,8 @@ function importData(input) {
             // 4. 恢复其他数据
             if (data.roles) localStorage.setItem('helios_roles', data.roles);
             if (data.posts) localStorage.setItem('helios_posts', data.posts);
+            if (data.fortune_settings) localStorage.setItem('helios_fortune_settings', data.fortune_settings);
+            if (data.sns_settings) localStorage.setItem('helios_sns_settings', data.sns_settings);
             if (typeof restoreChatBackupPayload === 'function') {
                 await restoreChatBackupPayload(data);
             } else {
