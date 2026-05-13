@@ -45,34 +45,24 @@ const DM_VIBE_PROMPT = `
 
 const GROUP_VIBE_PROMPT = `
 【核心指令】：你正在模拟一个多人群聊。所有成员都在手机线上聊天，不能出现面对面动作描写。
-为了节省调用次数，本次只能进行一次 API 回复，但群聊节奏必须自然浮动：有时只有 1 个人简单回一句，有时 1 个人连发两句，有时 2 个人短短接话。
+为了节省调用次数，本次只能进行一次 API 回复，但群聊节奏必须自然浮动：本轮会给你 1-4 个可发言成员，你要像真实群聊一样决定谁真的开口、谁沉默、谁接话、谁连发。
 
 【输出格式强制要求】
 1. 每条消息必须使用格式：@@MSG:角色ID@@消息内容
 2. 每个角色可以像私聊一样拆成多条短消息。每一条独立消息都用 @@SPLIT@@ 分隔，并且每条都要带 @@MSG:角色ID@@ 前缀。
-3. 本轮只允许 1-2 个角色发言。默认偏短：多数时候总共 1-2 条消息即可，偶尔 3-4 条，最多不要超过 6 条。
-4. 如果用户明确 @ 了某人，被 @ 的角色优先回复；没有 @ 时，选择最自然的 1-2 人。
+3. 本轮只允许 [GROUP MEMBERS] 里列出的角色发言。不是每个人都必须说话，真实群聊里有人看见但不回也很正常。
+4. 如果用户明确 @ 了某人，被 @ 的角色优先回复；没有 @ 时，让最有反应的人自然开口。
 5. 可以发送语音，消息内容以「[语音] 」开头即可。
 6. 可以发送转账卡片，消息内容单独写成：[转账] 12.5 | 备注
 7. 如果要回复某条历史消息，格式为：@@MSG:角色ID@@@@REPLY:消息ID@@消息内容，消息ID 来自 [CHAT HISTORY] 方括号。
 
-节奏参考，不要固定照抄：
-- 很轻的话题：@@MSG:@sage@@嗯嗯，我觉得可以。
-- 接梗时：@@MSG:@nico@@笑死。@@SPLIT@@@@MSG:@nico@@这也太突然了吧
-- 群里有人搭话时：@@MSG:@sage@@我觉得先看看也好。@@SPLIT@@@@MSG:@nico@@赞成，别急
-
-【语境规则】
-- 群聊里大家可以互相吐槽、接梗、短句回复。
-- 不要长篇独白，不要解释自己是 AI。
-- 回复像真实聊天，保留接话空间。
-- 不要平均分配台词，不要每次都两个人，也不要每个人都固定两句。
-- 单条消息不要很长。超过一句半的内容必须用 @@SPLIT@@ 拆开。
-
-【克制输出规则】
-- 降低过度输出和表演感：真实群聊不需要每次都热闹满屏。
-- 允许本轮只有一个人回一句，或者两个人各短短接一句。
-- 避免一次性说太多、连续堆叠情绪、自问自答、把气氛写满、强行总结关系状态。
-- 如果用户只是轻轻说一句、发图、发表情或日常闲聊，优先自然短回，不要主动扩写成大段。
+【强力群聊节奏规则】
+1. 绝对不要把群聊写成“轮流发言剧本”。不要平均分配台词，不要每人固定一句或两句。
+2. 允许混乱一点：有人只发一个字，有人连发几条，有人插话，有人完全不说。
+3. 允许冷场，也允许突然热闹。发言人数和消息条数都不要稳定。
+4. 根据上一条消息自然反应：简单问题可以很短，玩梗可以接几条，图片可以有人吐槽有人沉默。
+5. 角色之间可以互相接话，但不要强行总结气氛、关系、事件意义。
+6. 不要自问自答，不要把所有可能反应都写满。像真实手机群聊，不像舞台对白。
 `;
 
 // --- Global Chat State ---
@@ -1483,7 +1473,8 @@ ${historyText}
 
 [TOKEN SAVING RULES]
 Only these members may speak this round: ${allowedSpeakerIds}.
-Most rounds should be brief. Choose one member by default; use both only when it feels like a real group chat follow-up. One short message is often enough. Do not evenly assign two messages to each member.
+You may let 1-${speakerPool.length} of them actually talk. Silence is allowed. Message count is flexible.
+Vary the rhythm strongly from the previous round. Do not default to "one person sends exactly two messages".
 
 [REPLY LANGUAGE]
 No matter what language the user uses, all members must reply only in ${replyLanguageName}.
@@ -1508,16 +1499,13 @@ No matter what language the user uses, all members must reply only in ${replyLan
     document.getElementById('chat-title-status').innerText = "";
 
     if (!aiResponse) return;
-    const parts = aiResponse.split("@@SPLIT@@").map(p => p.trim()).filter(Boolean).slice(0, 6);
-    let shownCount = 0;
+    const parts = aiResponse.split("@@SPLIT@@").map(p => p.trim()).filter(Boolean);
     for (let i = 0; i < parts.length; i++) {
-        if (shownCount >= 6) break;
         const parsed = parseGroupAIMessage(parts[i], chat);
         if (!parsed || !parsed.roleId || !parsed.content) continue;
         if (i > 0) await new Promise(r => setTimeout(r, 600));
         const contentParts = splitLongChatText(parsed.content);
         for (let j = 0; j < contentParts.length; j++) {
-            if (shownCount >= 6) break;
             const content = contentParts[j];
             if (j > 0) await new Promise(r => setTimeout(r, 600));
             const replyTo = j === 0 ? parsed.replyTo : null;
@@ -1527,7 +1515,6 @@ No matter what language the user uses, all members must reply only in ${replyLan
             } else {
                 appendRoleMessage(parsed.roleId, content, 'text', '', replyTo);
             }
-            shownCount++;
         }
     }
 }
@@ -1622,11 +1609,22 @@ function extractMentionIds(text, chat) {
 }
 
 function pickGroupSpeakers(members, mentionedIds = []) {
+    const maxCount = Math.min(4, members.length);
     const mentioned = members.filter(r => mentionedIds.includes(r.id));
-    if (mentioned.length > 0) return mentioned.slice(0, 2);
-    const shuffled = members.slice().sort(() => Math.random() - 0.5);
-    const count = shuffled.length > 1 && Math.random() < 0.18 ? 2 : 1;
-    return shuffled.slice(0, count);
+    const targetCount = pickGroupSpeakerCount(maxCount);
+    const picked = mentioned.slice(0, maxCount);
+    const rest = members.filter(r => !picked.some(p => p.id === r.id)).sort(() => Math.random() - 0.5);
+    const finalCount = Math.max(Math.min(picked.length || targetCount, maxCount), targetCount);
+    return picked.concat(rest).slice(0, finalCount);
+}
+
+function pickGroupSpeakerCount(maxCount) {
+    if (maxCount <= 1) return 1;
+    const roll = Math.random();
+    if (roll < 0.28) return 1;
+    if (roll < 0.62) return Math.min(2, maxCount);
+    if (roll < 0.86) return Math.min(3, maxCount);
+    return maxCount;
 }
 
 function escapeChatHTML(value) {
@@ -1937,4 +1935,3 @@ document.addEventListener('click', (e) => {
         if (!panel.contains(e.target) && e.target !== btn) panel.classList.add('hidden');
     }
 });
-

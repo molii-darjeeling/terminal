@@ -299,7 +299,7 @@ input, textarea, select {
     padding-top: env(safe-area-inset-top);
     height: calc(45px + env(safe-area-inset-top));
 }
-.nav-left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.nav-left { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; }
 .star-icon { color: white; font-size: 1.2rem; cursor: pointer; flex-shrink: 0;}
 .star-icon.active { color: #f1c40f; text-shadow: 0 0 5px rgba(255,255,255,0.5); }
 .user-info { display: flex; flex-direction: column; line-height: 1.1; overflow: hidden; }
@@ -309,15 +309,28 @@ input, textarea, select {
 .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background-color: #ddd; flex-shrink: 0; }
 .sns-menu-btn {
     border: none;
-    background: rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.10);
     color: #fff;
-    width: 30px;
-    height: 30px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
-    font-size: 1.1rem;
+    font-size: 0;
     line-height: 1;
     flex-shrink: 0;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transform: translateY(1px);
+}
+.sns-menu-btn::before {
+    content: "";
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.88);
+    box-shadow: 8px 0 rgba(255,255,255,0.88), -8px 0 rgba(255,255,255,0.88);
 }
 .sns-settings-menu {
     position: absolute;
