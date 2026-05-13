@@ -71,6 +71,11 @@ const GROUP_VIBE_PROMPT = `
 4. 根据上一条消息自然反应：简单问题可以很短，玩梗可以接几条，图片可以有人吐槽有人沉默。
 5. 角色之间可以互相接话，但不要强行总结气氛、关系、事件意义。
 6. 不要自问自答，不要把所有可能反应都写满。像真实手机群聊，不像舞台对白。
+
+【红包领取规则（严守）】
+- [CHAT HISTORY] 会写明红包的领取记录。只有领取记录里出现了自己名字的角色，才可以说“我抢到了/我领到了/谢谢红包”。
+- 没有出现在领取记录里的角色，绝对不能假装自己抢到了红包；只能说“没抢到”“还有吗”“手慢了”等。
+- 发送 [红包] 指令只是发红包，不等于自己领取红包。
 `;
 
 // --- Global Chat State ---
@@ -1673,8 +1678,12 @@ function formatTransferText(msg, role) {
 
 function formatRedPacketText(msg) {
     const note = msg.note ? `，留言：${msg.note}` : '';
-    const claimed = (msg.claims || []).length;
-    return `[红包] $${formatTransferAmount(msg.totalAmount)} USD，共${msg.count}个，已领${claimed}个${note}`;
+    const claims = msg.claims || [];
+    const claimed = claims.length;
+    const claimText = claims.length
+        ? `，领取记录：${claims.map(c => `${c.name}领到$${formatTransferAmount(c.amount)}`).join('；')}`
+        : '，领取记录：暂无';
+    return `[红包] $${formatTransferAmount(msg.totalAmount)} USD，共${msg.count}个，已领${claimed}个${note}${claimText}`;
 }
 
 function formatTransferAmount(amount) {
