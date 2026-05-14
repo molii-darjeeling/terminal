@@ -402,6 +402,69 @@ function getReplyPromptLine(msg) {
     return msg && msg.replyTo ? ` [replying to ${msg.replyTo.name}: ${msg.replyTo.preview}]` : "";
 }
 
+function getChatTimePeriod(date = new Date()) {
+    const hour = date.getHours();
+    if (hour >= 5 && hour < 11) return "早上";
+    if (hour >= 11 && hour < 13) return "中午";
+    if (hour >= 13 && hour < 18) return "下午";
+    if (hour >= 18 && hour < 23) return "晚上";
+    return "深夜";
+}
+
+function getChatDateKey(ts) {
+    const date = ts ? new Date(ts) : new Date();
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function getChatDayDiff(ts, now = new Date()) {
+    const date = ts ? new Date(ts) : now;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    return Math.round((today - target) / 86400000);
+}
+
+function formatChatFullDate(date) {
+    const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${weekdays[date.getDay()]}`;
+}
+
+function formatChatDateDivider(ts, now = new Date()) {
+    if (!ts) return "时间未知";
+    const date = new Date(ts);
+    const diff = getChatDayDiff(ts, now);
+    if (diff === 0) return "今天";
+    if (diff === 1) return "昨天";
+    if (diff === 2) return "前天";
+    if (diff > 2 && diff < 7) return `${diff}天前`;
+    return formatChatFullDate(date);
+}
+
+function formatChatHistoryTimeLabel(ts, now = new Date()) {
+    if (!ts) return "time unknown";
+    const date = new Date(ts);
+    const time = formatTimeShort(ts);
+    const period = getChatTimePeriod(date);
+    const diff = getChatDayDiff(ts, now);
+    if (diff === 0) return `今天 ${time} / ${period}`;
+    if (diff === 1) return `昨天 ${time} / ${period} / ${formatChatFullDate(date)}`;
+    if (diff === 2) return `前天 ${time} / ${period} / ${formatChatFullDate(date)}`;
+    if (diff > 2) return `${diff}天前 ${time} / ${period} / ${formatChatFullDate(date)}`;
+    return `${formatChatFullDate(date)} ${time} / ${period}`;
+}
+
+function buildChatTimeContext(now = new Date()) {
+    const dateStr = formatChatFullDate(now);
+    const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    const period = getChatTimePeriod(now);
+    return `
+[CURRENT TIME]
+Today: ${dateStr}
+Now: ${timeStr} (${period})
+Use the message time labels in [CHAT HISTORY] to understand whether earlier events happened today, yesterday, days ago, or on another date. React naturally to morning/noon/afternoon/evening/late night context.
+If today matches any birthday mentioned in character or user persona, acknowledge it naturally.
+`;
+}
+
 function getPendingVisionImage(chat) {
     if (!chat || !Array.isArray(chat.messages)) return null;
     const lastRoleIndex = chat.messages.map(m => m.sender).lastIndexOf('role');
@@ -775,11 +838,20 @@ function renderMessages() {
 
     const role = getChatRole(chat);
     const chatUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
+    let lastDateKey = "";
 
     chat.messages.forEach((msg,index) => {
         const isMe = msg.sender === 'user';
         const msgRole = msg.roleId ? roles.find(r => r.id === msg.roleId) : role;
         const avatarSrc = isMe ? chatUser.avatar : (msgRole ? msgRole.avatar : "");
+        const currentDateKey = getChatDateKey(msg.timestamp);
+        if (currentDateKey !== lastDateKey) {
+            const divider = document.createElement('div');
+            divider.className = "chat-date-divider";
+            divider.innerText = formatChatDateDivider(msg.timestamp);
+            container.appendChild(divider);
+            lastDateKey = currentDateKey;
+        }
         
         const row = document.createElement('div');
         row.className = `chat-bubble-row ${isMe ? 'right' : 'left'}`;
@@ -854,13 +926,14 @@ function renderMessages() {
         } else if (msg.type === 'transfer' || msg.type === 'transferReceipt' || msg.type === 'redpacket') {
             const canReceiveTransfer = msg.type === 'transfer' && canUserReceiveTransfer(msg, chat);
             const cardClickAttr = canReceiveTransfer ? ` onclick="openTransferReceiveModal(event, '${escapeChatHTML(msg.id)}')"` : '';
+            const transferDataAttr = msg.type === 'transfer' ? ` data-transfer-id="${escapeChatHTML(msg.id)}"` : '';
             const cardClass = msg.type === 'redpacket' ? 'redpacket-card' : (msg.type === 'transferReceipt' ? 'transfer-receipt-card' : 'transfer-card');
             innerHTMLContent = `
                 <div style="display:flex; align-items:flex-end; gap:5px;">
                     ${isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                     <div>
                         ${chat.type === 'group' && !isMe && msgRole ? `<div class="group-sender-name">${escapeChatHTML(msgRole.name)}</div>` : ''}
-                        <div class="chat-bubble-content ${cardClass} ${canReceiveTransfer ? 'transfer-card-receivable' : ''} ${targetClass}"${cardClickAttr}>${replyQuoteHTML}${bubbleContent}</div>
+                        <div class="chat-bubble-content ${cardClass} ${canReceiveTransfer ? 'transfer-card-receivable' : ''} ${targetClass}"${transferDataAttr}${cardClickAttr}>${replyQuoteHTML}${bubbleContent}</div>
                     </div>
                     ${!isMe ? `<div class="chat-timestamp-side">${timeStr}</div>` : ''}
                 </div>
@@ -905,6 +978,10 @@ function renderMessages() {
         `;
         container.appendChild(row);
         hydrateChatImages(row);
+        const transferEl = row.querySelector('[data-transfer-id]');
+        if (transferEl && canUserReceiveTransfer(msg, chat)) {
+            transferEl.addEventListener('click', (e) => openTransferReceiveModal(e, msg.id));
+        }
 
        // --- 4. 绑定悬浮菜单长按事件 ---
         setTimeout(() => {
@@ -1215,6 +1292,16 @@ function closeTransferModal() {
     document.getElementById('transfer-modal').classList.add('hidden');
 }
 
+function receiveUserTransfer(msg, chat) {
+    if (!msg || !chat || !canUserReceiveTransfer(msg, chat)) return false;
+    msg.accepted = true;
+    msg.acceptedAt = Date.now();
+    msg.acceptedBy = 'user';
+    appendTransferReceiptMessage('user', msg, '', null, chat.id);
+    showToast('已接收转账');
+    return true;
+}
+
 function openTransferReceiveModal(e, msgId) {
     if (e) {
         e.stopPropagation();
@@ -1224,12 +1311,7 @@ function openTransferReceiveModal(e, msgId) {
     if (!chat) return;
     const msg = chat.messages.find(m => m.id === msgId && m.type === 'transfer');
     if (!msg || !canUserReceiveTransfer(msg, chat)) return;
-    const senderRole = msg.roleId ? roles.find(r => r.id === msg.roleId) : getChatRole(chat);
-    pendingReceiveTransferId = msgId;
-    document.getElementById('receive-transfer-sender').innerText = senderRole ? senderRole.name : '对方';
-    document.getElementById('receive-transfer-amount').innerText = `$${formatTransferAmount(msg.amount)} USD`;
-    document.getElementById('receive-transfer-note').innerText = msg.note || '没有备注';
-    document.getElementById('transfer-receive-modal').classList.remove('hidden');
+    receiveUserTransfer(msg, chat);
 }
 
 function closeTransferReceiveModal() {
@@ -1242,15 +1324,7 @@ function confirmReceiveTransfer() {
     const chat = normalizeChat(chats.find(c => c.id === currentChatId));
     if (!chat) return;
     const msg = chat.messages.find(m => m.id === pendingReceiveTransferId && m.type === 'transfer');
-    if (msg && canUserReceiveTransfer(msg, chat)) {
-        msg.accepted = true;
-        msg.acceptedAt = Date.now();
-        msg.acceptedBy = 'user';
-        appendTransferReceiptMessage('user', msg);
-        saveChatData();
-        renderMessages();
-        showToast('已接收转账');
-    }
+    receiveUserTransfer(msg, chat);
     closeTransferReceiveModal();
 }
 
@@ -1334,23 +1408,7 @@ async function triggerChatGen() {
     }
     
     const now = new Date();
-    const hour = now.getHours();
-    let timePeriod = "深夜";
-    if (hour >= 5 && hour < 11) timePeriod = "早上";
-    else if (hour >= 11 && hour < 13) timePeriod = "中午";
-    else if (hour >= 13 && hour < 18) timePeriod = "下午";
-    else if (hour >= 18 && hour < 23) timePeriod = "晚上";
-
-    const dateStr = now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
-    const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-
-    const TIME_CONTEXT = `
-    [CURRENT TIME AWARENESS]
-    Now: ${dateStr}, ${timeStr} (${timePeriod})
-    Rules:
-    1. Reply naturally based on the time of day.
-    2. Check the [YOUR ROLE] and [USER INFO] Persona descriptions. If today matches any birthday mentioned there, acknowledge it naturally.
-    `;
+    const TIME_CONTEXT = buildChatTimeContext(now);
 
     const role = getChatRole(chat);
     if (!role) {
@@ -1407,7 +1465,7 @@ async function triggerChatGen() {
             content = m.content;
         }
         
-        return `[${m.id}] ${name}${getReplyPromptLine(m)}: ${content}`;
+        return `[${m.id}] [${formatChatHistoryTimeLabel(m.timestamp, now)}] ${name}${getReplyPromptLine(m)}: ${content}`;
     }).join("\n");
     
     let summaryPrompt = "";
@@ -1532,6 +1590,8 @@ async function triggerGroupChatGen(chat, btnImg, iconIdle, iconStop) {
 
     const chatUser = userProfiles[currentChatConfig.activeProfileIdx] || user;
     const replyLanguageName = currentChatConfig.replyLanguage === 'ja' ? 'Japanese' : 'Simplified Chinese';
+    const now = new Date();
+    const TIME_CONTEXT = buildChatTimeContext(now);
 
     let wbContext = "";
     if (currentChatConfig.activeWorldBookIndices && typeof globalWorldBooks !== 'undefined') {
@@ -1566,11 +1626,12 @@ async function triggerGroupChatGen(chat, btnImg, iconIdle, iconStop) {
         else if (m.type === 'transfer') content = formatTransferText(m, roles.find(r => r.id === m.roleId));
         else if (m.type === 'transferReceipt') content = formatTransferReceiptText(m);
         else if (m.type === 'redpacket') content = formatRedPacketText(m, true);
-        return `[${m.id}] ${speaker}${getReplyPromptLine(m)}: ${content}`;
+        return `[${m.id}] [${formatChatHistoryTimeLabel(m.timestamp, now)}] ${speaker}${getReplyPromptLine(m)}: ${content}`;
     }).join("\n");
 
     const fullSystemPrompt = `
 ${GROUP_VIBE_PROMPT}
+${TIME_CONTEXT}
 ${typeof HELIOS_WORLD_CONFIG !== 'undefined' ? HELIOS_WORLD_CONFIG : ''}
 
 [GROUP]
@@ -1767,8 +1828,8 @@ function renderTransferReceiptCardBody(msg, isMe, role, chatUser) {
 }
 
 function canUserReceiveTransfer(msg, chat) {
-    if (!msg || msg.type !== 'transfer' || msg.sender === 'user' || msg.accepted) return false;
-    if (chat && chat.type === 'group' && msg.targetRoleId) return false;
+    if (!msg || msg.type !== 'transfer' || msg.sender === 'user' || msg.accepted === true || msg.acceptedBy === 'user') return false;
+    if (chat && chat.type === 'group' && msg.targetRoleId && roles.some(r => r.id === msg.targetRoleId)) return false;
     return true;
 }
 
