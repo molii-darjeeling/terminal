@@ -465,6 +465,33 @@ If today matches any birthday mentioned in character or user persona, acknowledg
 `;
 }
 
+function getGroupOutsideContactContext(chat, recentMsgs, members, limit = 3) {
+    if (!chat || !Array.isArray(recentMsgs) || typeof roles === 'undefined') return "";
+    const memberIds = new Set((members || []).map(r => r.id));
+    const picked = [];
+    const pickedIds = new Set();
+    const sources = recentMsgs.slice(-8).reverse().map(m => {
+        const parts = [m.content || "", m.desc || ""];
+        if (m.replyTo) parts.push(m.replyTo.name || "", m.replyTo.preview || "");
+        return parts.join(" ").toLowerCase();
+    });
+    for (const source of sources) {
+        if (picked.length >= limit) break;
+        for (const role of roles) {
+            if (!role || role.isEnabled === false || memberIds.has(role.id) || pickedIds.has(role.id)) continue;
+            const keys = [role.name, role.id].filter(Boolean).map(v => String(v).toLowerCase());
+            if (keys.some(key => key && source.includes(key))) {
+                picked.push(role);
+                pickedIds.add(role.id);
+                if (picked.length >= limit) break;
+            }
+        }
+    }
+    if (!picked.length) return "";
+    const text = picked.map(r => `[OUTSIDE CONTACT]\nName: ${r.name} (${r.id})\nPersona: ${r.persona}`).join("\n\n");
+    return `[MENTIONED OUTSIDE CONTACTS]\nThese people were mentioned recently but are not group members. Use them only as background information. They must not speak in this group unless they are added as members.\n${text}`;
+}
+
 function getPendingVisionImage(chat) {
     if (!chat || !Array.isArray(chat.messages)) return null;
     const lastRoleIndex = chat.messages.map(m => m.sender).lastIndexOf('role');
@@ -1607,6 +1634,7 @@ async function triggerGroupChatGen(chat, btnImg, iconIdle, iconStop) {
     const recentMsgs = chat.messages.slice(-historyLimit);
     const mentionedIds = extractMentionIds(recentMsgs.filter(m => m.sender === 'user').slice(-2).map(m => m.content || '').join(' '), chat);
     const speakerPool = pickGroupSpeakers(members, mentionedIds);
+    const outsideContactText = getGroupOutsideContactContext(chat, recentMsgs, members, 3);
     const allowedSpeakerIds = speakerPool.map(r => r.id).join(', ');
     const memberText = speakerPool.map(r => {
         const marker = mentionedIds.includes(r.id) ? ' [MENTIONED]' : '';
@@ -1645,6 +1673,8 @@ Persona: ${chatUser.persona}
 ${memberText}
 
 ${wbContext}
+
+${outsideContactText}
 
 [CHAT HISTORY]
 ${historyText}
